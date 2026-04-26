@@ -724,12 +724,7 @@ CITY = "Madrid"        # o cualquier ciudad
 COUNTRY_CODE = "ES"
 ```
 
-### Usar datos de prueba
 
-En `main.py`, cambiar la línea de importación:
-```python
-from data.mock import get_mock_data as get_all_data
-```
 
 ---
 
@@ -757,6 +752,6 @@ La capa de arte no es decorativa para el portfolio. Es lo que hace que el proyec
 
 ---
 
-*Proyecto desarrollado por [tu nombre] — Sevilla, 2026*
+*Proyecto desarrollado por Nora Peñaloza Friqui — Sevilla, 2026*
 
 *Stack: Python · p5.js · scikit-learn · PyTorch · ERA5 · OpenWeatherMap API · GitHub Actions · GitHub Pages*
