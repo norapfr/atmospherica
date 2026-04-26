@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ATMOSPHERICA — Seville 2026-04-25</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0a; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; min-height: 100vh; }
+  canvas { display: block; }
+  #meta { margin-top: 16px; font-family: monospace; font-size: 11px;
+           color: #555; letter-spacing: 0.08em; text-align: center; }
+  #save { margin-top: 14px; padding: 8px 20px; background: transparent;
+           border: 1px solid #333; color: #666; font-family: monospace;
+           font-size: 11px; cursor: pointer; letter-spacing: 0.1em; }
+  #save:hover { border-color: #666; color: #aaa; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="meta"></div>
+<button id="save">GUARDAR PNG</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<script>
+const CLIMATE = {
+  "city": "Seville",
+  "date": "2026-04-25",
+  "temp_c": 23.81,
+  "pressure": 1014,
+  "wind_speed": 1.34,
+  "pm25": 9.36,
+  "temp_norm": 0.518,
+  "wind_energy": 0.067,
+  "wind_dx": 0.899,
+  "wind_dy": 0.438,
+  "pm_norm": 0.125,
+  "opacity_base": 75.29411764705883,
+  "noise_scale": 0.00252,
+  "day_type": "stable",
+  "n_particles": 15200,
+  "bg_h": 30.0,
+  "bg_s": 12.2,
+  "bg_b": 13.8,
+  "palette": {
+    "dark": [
+      30.0,
+      34.23,
+      9.225
+    ],
+    "mid": [
+      30.0,
+      48.9,
+      36.9
+    ],
+    "bright": [
+      30.0,
+      36.675,
+      66.42
+    ],
+    "accent": [
+      42.0,
+      53.790000000000006,
+      77.49
+    ]
+  }
+};
+const W = 900, H = 1100;
+let field, cols, rows, RES = 10;
+let particles = [];
+let drawn = 0;
+let totalParticles = 0;
+
+new p5(function(p) {
+
+  p.setup = function() {
+    let cnv = p.createCanvas(W, H);
+    cnv.parent(document.body);
+    p.colorMode(p.HSB, 360, 100, 100, 100);
+    p.noStroke();
+    p.background(
+      CLIMATE.bg_h,
+      CLIMATE.bg_s,
+      CLIMATE.bg_b
+    );
+    p.noiseDetail(4, 0.5);
+    buildField(p);
+    buildParticles(p);
+    renderMeta();
+  };
+
+  p.draw = function() {
+    const BATCH = 120;
+    for (let i = 0; i < BATCH; i++) {
+      if (drawn >= particles.length) {
+        p.noLoop();
+        console.log('DONE');
+        return;
+      }
+      drawParticle(p, particles[drawn]);
+      drawn++;
+    }
+  };
+
+  // ---- FLOW FIELD ------------------------------------------------
+  function buildField(p) {
+    cols = Math.floor(W / RES);
+    rows = Math.floor(H / RES);
+    field = [];
+    const cx = W / 2, cy = H / 2;
+    const ns = CLIMATE.noise_scale;
+    const windDx = CLIMATE.wind_dx;
+    const windDy = CLIMATE.wind_dy;
+    const windE  = CLIMATE.wind_energy;
+
+    for (let r = 0; r < rows; r++) {
+      field[r] = [];
+      for (let c = 0; c < cols; c++) {
+        const x = c * RES, y = r * RES;
+
+        // Ruido suave — pocas octavas = formas amplias no gusanos
+        const n = p.noise(x * ns, y * ns);
+
+        // Angulo con rango limitado: evita espirales cerradas
+        const baseAngle = (n - 0.5) * Math.PI * 1.6;
+
+        let angle;
+        if (CLIMATE.day_type === 'stable') {
+  // Flujo radial suavizado con ruido — evita la linea de convergencia
+  const radAngle = Math.atan2(y - cy, x - cx);
+  // El ruido desvía el flujo para que no converja en un punto exacto
+  const noiseAngle = (p.noise(x * ns * 2, y * ns * 2, 99) - 0.5) * Math.PI * 0.8;
+  angle = radAngle * 0.45 + baseAngle * 0.35 + noiseAngle * 0.20;
+
+        } else if (CLIMATE.day_type === 'windy') {
+          // Flujo paralelo al viento con ondulacion suave
+          const windAngle = Math.atan2(windDy, windDx + 1e-6);
+          const blend = Math.min(0.85, windE * 1.4);
+          angle = windAngle * blend + baseAngle * (1 - blend);
+        } else if (CLIMATE.day_type === 'cold') {
+          // Flujo convergente hacia los bordes
+          const edgeAngle = Math.atan2(cy - y, cx - x) + Math.PI;
+          angle = edgeAngle * 0.5 + baseAngle * 0.5;
+        } else {
+          // Contaminado o intermedio: ruido puro pero suave
+          angle = baseAngle;
+        }
+
+        field[r][c] = { x: Math.cos(angle), y: Math.sin(angle) };
+      }
+    }
+  }
+
+  // ---- PESO CLIMATICO (donde pone el foco el clima) --------------
+  function climateWeight(x, y) {
+    const cx = W / 2, cy = H / 2;
+    const maxD = Math.sqrt(cx * cx + cy * cy);
+    const windDx = CLIMATE.wind_dx;
+    const windDy = CLIMATE.wind_dy;
+    const windE  = CLIMATE.wind_energy;
+
+    if (CLIMATE.day_type === 'windy') {
+      const proj = ((x-cx)*windDx + (y-cy)*windDy) / maxD;
+      return Math.max(0.1, Math.min(1, 0.5 + proj * 0.7));
+    } else if (CLIMATE.day_type === 'cold') {
+      const d = Math.sqrt((x-cx)**2 + (y-cy)**2) / maxD;
+      return Math.max(0.1, Math.min(1, Math.pow(d, 1.6) * 0.9 + 0.1));
+    } else {
+      // Estable: foco central suave desplazado por el viento
+      const fx = cx + windDx * 80 * windE;
+      const fy = cy + windDy * 80 * windE;
+      const d  = Math.sqrt((x-fx)**2 + (y-fy)**2) / maxD;
+      return Math.max(0.1, Math.min(1, 1 - Math.pow(d, 1.3)));
+    }
+  }
+
+  // ---- PARTICULAS ------------------------------------------------
+  function buildParticles(p) {
+    totalParticles = CLIMATE.n_particles;
+    const dark   = CLIMATE.palette.dark;
+    const mid    = CLIMATE.palette.mid;
+    const bright = CLIMATE.palette.bright;
+    const accent = CLIMATE.palette.accent;
+
+    for (let i = 0; i < totalParticles; i++) {
+      // Posicion sesgada por foco climatico
+      let x, y, w;
+      for (let a = 0; a < 8; a++) {
+        const tx = p.random(W), ty = p.random(H);
+        const tw = climateWeight(tx, ty);
+        if (p.random() < tw || a === 7) {
+          x = tx; y = ty; w = tw; break;
+        }
+      }
+
+      const depth = i / totalParticles;
+
+      // Color interpolado entre capas segun profundidad y foco
+      let col;
+      if (depth < 0.33) {
+        col = lerpColor(dark, mid, depth / 0.33, w);
+      } else if (depth < 0.66) {
+        col = lerpColor(mid, bright, (depth-0.33)/0.33, w);
+      } else {
+        col = lerpColor(bright, accent, (depth-0.66)/0.34, w);
+      }
+
+      // Longitud del trazo segun clima
+      let steps;
+      const isLong = depth > 0.45 && p.random() < 0.18;
+      if (isLong) {
+        steps = Math.floor(60 + w * 100 + p.randomGaussian(0, 20));
+      } else {
+        steps = Math.floor(10 + w * 45 + depth * 30 + p.randomGaussian(0, 8));
+      }
+      steps = Math.max(5, Math.min(200, steps));
+
+      // Velocidad
+      const speed = 2.0 + CLIMATE.wind_energy * 4.0 + w * 2.0;
+
+      // Grosor: capas superficiales y zonas de foco mas gruesas
+      const sw = 0.3 + depth * 2.8 + w * 2.0 + (isLong ? 0.6 : 0);
+
+      // Alpha: zonas de foco mas opacas
+      const baseAlpha = CLIMATE.opacity_base;
+      const alpha = Math.min(92, Math.max(4,
+        baseAlpha * (0.06 + w * 0.55 + depth * 0.30)
+      ));
+
+      particles.push({ x, y, w, col, steps, speed, sw, alpha, isLong });
+    }
+
+    // Interdigitar capas para que no haya orden visible
+    particles.sort(() => Math.random() - 0.5);
+  }
+
+  function lerpColor(a, b, t, w) {
+    const focus = w * 0.4;
+    t = Math.min(1, t + focus);
+    return [
+      a[0] + (b[0]-a[0]) * t,
+      a[1] + (b[1]-a[1]) * t,
+      a[2] + (b[2]-a[2]) * t
+    ];
+  }
+
+  function drawParticle(p, pt) {
+    let x = pt.x, y = pt.y;
+    p.strokeWeight(pt.sw);
+
+    for (let s = 0; s < pt.steps; s++) {
+      const col = Math.floor(x / RES);
+      const row = Math.floor(y / RES);
+      if (col < 0 || col >= cols || row < 0 || row >= rows) break;
+
+      const v = field[row][col];
+
+      // Micro-turbulencia organica (muy sutil)
+      const micro = (p.noise(x*0.015, y*0.015, s*0.08) - 0.5) * 1.2;
+
+      const nx = x + v.x * pt.speed + micro;
+      const ny = y + v.y * pt.speed + micro;
+
+      if (nx < 0 || nx > W || ny < 0 || ny > H) break;
+
+      // PM2.5 fragmenta — hoy Sevilla muy limpia
+      if (Math.random() < CLIMATE.pm_norm * 0.07) break;
+
+      // Fade natural de la pincelada
+      const progress = s / pt.steps;
+      const fadeA = pt.alpha * (1 - progress * 0.6);
+      const [h, s2, b] = pt.col;
+      const briBoost = pt.w * 12 * (1 - progress * 0.4);
+
+      p.stroke(h, s2, Math.min(100, b + briBoost), fadeA);
+      p.line(x, y, nx, ny);
+
+      x = nx; y = ny;
+    }
+  }
+
+  // ---- META ------------------------------------------------------
+  function renderMeta() {
+    document.getElementById('meta').innerHTML =
+      `ATMOSPHERICA &nbsp;|&nbsp; ${CLIMATE.city} &nbsp;|&nbsp; ${CLIMATE.date} &nbsp;|&nbsp; ` +
+      `${CLIMATE.temp_c.toFixed(1)}°C &nbsp;|&nbsp; ${CLIMATE.pressure} hPa &nbsp;|&nbsp; ` +
+      `${CLIMATE.wind_speed.toFixed(1)} m/s &nbsp;|&nbsp; PM2.5 ${CLIMATE.pm25.toFixed(1)}`;
+  }
+
+  // ---- GUARDAR ---------------------------------------------------
+ document.getElementById('save').addEventListener('click', function() {
+  const cnv = document.getElementById('c');
+  const exportCanvas = document.createElement('canvas');
+  exportCanvas.width = cnv.width;
+  exportCanvas.height = cnv.height;
+  const ctx = exportCanvas.getContext('2d');
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+  ctx.drawImage(cnv, 0, 0);
+  const a = document.createElement('a');
+  a.download = 'atmospherica_Seville_2026-04-25.png';
+  a.href = exportCanvas.toDataURL('image/png');
+  a.click();
+});
+});
+</script>
+</body>
+</html>

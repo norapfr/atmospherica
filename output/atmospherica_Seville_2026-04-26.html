@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ATMOSPHERICA</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#060608; display:flex; flex-direction:column;
+          align-items:center; justify-content:center; min-height:100vh;
+          font-family: monospace; }
+  #topbar { width:900px; max-width:calc(100vw - 32px); display:flex;
+             align-items:flex-start; justify-content:space-between;
+             margin-bottom:14px; gap:18px; }
+  #topinfo { display:flex; flex-direction:column; gap:5px; flex:1; }
+  #title { font-size:11px; color:#6d6d6d; letter-spacing:0.14em; }
+  #wrap { position:relative; }
+  canvas { display:block; }
+  #legend { margin-top:16px; display:flex; flex-direction:column;
+             gap:7px; max-width:900px; width:100%; }
+  .leg { display:grid; grid-template-columns:8px 1fr; column-gap:9px;
+          align-items:start; font-size:10px; color:#555; letter-spacing:0.04em; }
+  .dot { width:8px; height:8px; border-radius:50%; margin-top:2px; }
+  .leg strong { display:block; color:#7a7a7a; font-weight:normal; letter-spacing:0.08em; }
+  .leg small { display:block; color:#444; font-size:9px; line-height:1.4; margin-top:2px; }
+  #meta { font-size:10px; color:#444; letter-spacing:0.08em; line-height:1.7; }
+  #save { padding:8px 22px; background:transparent; border:1px solid #1e1e1e;
+           color:#444; font-family:monospace; font-size:9px; cursor:pointer;
+           letter-spacing:0.14em; transition: all 0.2s; white-space:nowrap; }
+  #save:hover { border-color:#555; color:#aaa; }
+  #progress { font-size:9px; color:#2a2a2a; letter-spacing:0.1em; min-height:16px; }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div id="topinfo">
+    <div id="title"></div>
+    <div id="meta"></div>
+    <div id="progress">preparando...</div>
+  </div>
+  <button id="save" onclick="saveImg()">GUARDAR PNG</button>
+</div>
+<div id="wrap"><canvas id="c"></canvas></div>
+<div id="legend"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<script>
+const C = {
+  "city": "Seville",
+  "date": "2026-04-26",
+  "temp_c": 16.54,
+  "pressure": 1015,
+  "wind_speed": 1.03,
+  "wind_dir_label": "SE",
+  "pm25": 2.76,
+  "humidity": 90,
+  "clouds": 0,
+  "temp_norm": 0.36,
+  "pressure_norm": 0.738,
+  "wind_energy": 0.052,
+  "wind_dx": 0.643,
+  "wind_dy": 0.766,
+  "pm_norm": 0.037,
+  "humidity_norm": 0.938,
+  "day_type": "stable",
+  "palette": {
+    "temp": [
+      38,
+      68,
+      82
+    ],
+    "pressure": [
+      42,
+      35,
+      74
+    ],
+    "wind": [
+      205,
+      17,
+      66
+    ],
+    "pm": [
+      88,
+      20,
+      75
+    ],
+    "humidity": [
+      212,
+      49,
+      88
+    ],
+    "bg": [
+      216.7,
+      5.3999999999999995,
+      6.4
+    ]
+  }
+};
+const W = 900, H = 1100;
+
+function saveImg() {
+  const cnv = document.getElementById('c');
+  const tmp = document.createElement('canvas');
+  tmp.width = cnv.width; tmp.height = cnv.height;
+  const ctx = tmp.getContext('2d');
+  ctx.fillStyle = '#060608';
+  ctx.fillRect(0, 0, tmp.width, tmp.height);
+  ctx.drawImage(cnv, 0, 0);
+  document.getElementById('progress').textContent = 'guardando...';
+  tmp.toBlob(blob => {
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = 'atmospherica_' + C.city + '_' + C.date + '.png';
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    document.getElementById('progress').textContent = 'png guardado';
+  }, 'image/png');
+}
+
+window.sketch = new p5(function(p) {
+
+  let phase = 0, phaseStep = 0, done = false;
+  const PHASES = [420, 220, 260, 160, 180];
+
+  // ════════════════════════════════════════════════════════════════
+  // PALETA COMPLETA — cada variable tiene su propio color vivo
+  // basado en los datos reales, no en valores fijos
+  // ════════════════════════════════════════════════════════════════
+  const PAL = C.palette;
+
+  p.setup = function() {
+    let cnv = p.createCanvas(W, H);
+    cnv.elt.id = 'c';
+    cnv.parent('wrap');
+    cnv.elt.style.position = 'absolute';
+    cnv.elt.style.top = '0'; cnv.elt.style.left = '0';
+    document.getElementById('wrap').style.width  = W + 'px';
+    document.getElementById('wrap').style.height = H + 'px';
+    p.colorMode(p.HSB, 360, 100, 100, 100);
+    paintBackground();
+    renderMeta();
+    renderLegend();
+    updateProgress();
+  };
+
+  p.draw = function() {
+    if (done) { p.noLoop(); return; }
+    for (let i = 0; i < 20; i++) {
+      if (phase >= PHASES.length) {
+        done = true;
+        paintFinalGlaze();
+        document.getElementById('progress').textContent = 'listo - pulsa guardar';
+        break;
+      }
+      paintOne(phase, phaseStep / PHASES[phase]);
+      phaseStep++;
+      if (phaseStep >= PHASES[phase]) {
+        phase++; phaseStep = 0; updateProgress();
+      }
+    }
+  };
+
+  // ── FONDO ────────────────────────────────────────────────────────
+  // Color de fondo derivado de la temperatura real
+  // Calido=fondo con tinte ambar; frio=fondo con tinte azul
+  function paintBackground() {
+    const [bh, bs, bb] = PAL.bg;
+    const clouds = (C.clouds || 0) / 100;
+
+    p.noStroke();
+    p.background(bh, bs * 0.08, bb * 0.4);
+
+    // Gradiente radial desplazado segun viento — asimetrico
+    const gx = W * (0.38 + C.wind_dx * 0.15);
+    const gy = H * (0.40 + C.wind_dy * 0.12);
+    const maxR = Math.sqrt(W*W + H*H) * 0.78;
+
+    for (let r = maxR; r > 0; r -= 5) {
+      const t = 1 - r / maxR;
+      p.fill(bh, bs*(0.05 + t*0.35), bb*(0.28 + t*0.92 - clouds*0.2), 100);
+      p.ellipse(gx, gy, r*1.45, r*1.08);
+    }
+
+    // Textura de lienzo — grano fino
+    for (let i = 0; i < 80; i++) {
+      const x = p.random(W), y = p.random(H);
+      p.fill(bh, bs*0.3, bb+6, p.random(0.4, 1.8));
+      p.ellipse(x, y, p.random(6,28), p.random(5,18));
+    }
+  }
+
+  // ── DISTRIBUCION — 6 zonas que evitan el centro ─────────────────
+  function sampleZone() {
+    const z = Math.floor(p.random(6));
+    switch(z) {
+      case 0: return [p.random(W*0.02,W*0.33), p.random(H*0.03,H*0.43)];  // sup izq
+      case 1: return [p.random(W*0.63,W*0.97), p.random(H*0.03,H*0.41)];  // sup dcha
+      case 2: return [p.random(W*0.02,W*0.35), p.random(H*0.57,H*0.97)];  // inf izq
+      case 3: return [p.random(W*0.61,W*0.97), p.random(H*0.55,H*0.97)];  // inf dcha
+      case 4: return [p.random(W*0.08,W*0.90), p.random(H*0.02,H*0.19)];  // borde sup
+      default:return [p.random(W*0.08,W*0.90), p.random(H*0.81,H*0.98)];  // borde inf
+    }
+  }
+
+  function sampleEdge() {
+    const m = p.random(50,160), s = Math.floor(p.random(4));
+    if (s===0) return [p.random(W), m];
+    if (s===1) return [W-m, p.random(H)];
+    if (s===2) return [p.random(W), H-m];
+    return [m, p.random(H)];
+  }
+
+  function sampleFree() {
+    return [p.random(W*0.04, W*0.96), p.random(H*0.04, H*0.96)];
+  }
+
+  // ── PASES ────────────────────────────────────────────────────────
+  function paintOne(ph, t) {
+    if (ph===0) paintTemp(t);
+    else if (ph===1) paintPressure(t);
+    else if (ph===2) paintWind(t);
+    else if (ph===3) paintPM(t);
+    else             paintHumidity(t);
+  }
+
+  // TEMPERATURA — masas de color, el cuerpo del cuadro
+  // Color: azul-frio a rojo-ambar segun temperatura real
+  // Tamaño: mas calor = pinceladas mas grandes y saturadas
+  function paintTemp(t) {
+    const [h, s, b] = PAL.temp;
+    const temp = C.temp_norm;
+    const [x, y] = sampleZone();
+    const rot  = p.random(-p.PI, p.PI);
+    const w2   = 90 + temp * 220 + p.random(70);
+    const hgt  = 20 + temp * 70  + p.random(25);
+    // Alpha directo al dato: mas calor = mas opaco y presente
+    const alpha = 18 + temp * 42 + p.random(15);
+    // Saturacion tambien responde al calor
+    const sat   = Math.min(100, s * (0.7 + temp * 0.5));
+    const bri   = Math.min(100, b * (0.6 + temp * 0.5 + t * 0.3));
+
+    brushMark(x, y, w2, hgt, rot, h, sat, bri, alpha);
+  }
+
+  // PRESION — estructura y tension
+  // Alta presion: arcos amplios y luminosos (dia estable)
+  // Baja presion: arcos cortos y tensos en los bordes (inestabilidad)
+  function paintPressure(t) {
+    const [h, s, b] = PAL.pressure;
+    const pnorm = C.pressure_norm;
+    const [x, y] = pnorm > 0.52 ? sampleZone() : sampleEdge();
+    const r     = pnorm > 0.52 ? p.random(80,270) : p.random(20,110);
+    const start = p.random(p.TWO_PI);
+    const span  = pnorm > 0.52
+      ? p.random(p.PI*0.6, p.PI*1.8)
+      : p.random(p.PI*0.9, p.PI*2.1);
+    // Alta presion = arcos mas brillantes y visibles
+    const alpha = 10 + pnorm * 28;
+    const sat   = Math.min(100, s * (0.6 + pnorm * 0.6));
+    const bri   = Math.min(100, b * (0.5 + pnorm * 0.7));
+
+    for (let i = 0; i < 3; i++) {
+      p.noFill();
+      p.stroke(h + i*4, sat*(0.95-i*0.1), Math.min(100, bri+i*8), alpha*(0.6-i*0.12));
+      p.strokeWeight(1.4 - i*0.2 + pnorm*0.6);
+      p.arc(x, y, r*2.5*(1+i*0.2), r*1.5*(1+i*0.2), start+i*0.08, start+span-i*0.04);
+    }
+  }
+
+  // VIENTO — trazos direccionales
+  // Color: azul helado a blanco segun velocidad
+  // Longitud: proporcional a la velocidad real en m/s
+  // Dia calmo (1.3 m/s hoy): trazos cortos y casi invisibles
+  function paintWind(t) {
+    const [h, s, b] = PAL.wind;
+    const we        = C.wind_energy;
+    const windAng   = Math.atan2(C.wind_dy, C.wind_dx);
+    const [x, y]   = sampleFree();
+    const spread    = p.PI * (we < 0.3 ? 0.9 : 0.25);
+    const dir       = windAng + p.random(-spread, spread);
+    const len       = we < 0.15 ? p.random(15,70) : p.random(80, 380*we);
+    // Velocidad real controla opacidad — calmo=sutil, ventoso=dominante
+    const alpha     = 6 + we * 55;
+    const sat       = Math.min(100, s * (0.4 + we * 0.9));
+    const bri       = Math.min(100, b * (0.7 + we * 0.4));
+    const sw        = we < 0.1 ? p.random(0.3,1.2) : p.random(0.8, 3+we*3);
+
+    windRibbon(x, y, len, dir, h, sat, bri, alpha, sw);
+  }
+
+  // PM2.5 — grano y erosion
+  // Color: gris-verdoso enfermizo, mas intenso cuanto mas contaminado
+  // Hoy Sevilla tiene aire limpio (9.4): casi invisible
+  function paintPM(t) {
+    const [h, s, b] = PAL.pm;
+    const pm        = C.pm_norm;
+    if (pm < 0.14 && p.random() > pm * 4) return;
+    const [x, y]   = sampleFree();
+    const grain     = Math.floor(3 + pm * 24);
+    const alpha     = 4 + pm * 28;
+
+    for (let i = 0; i < grain; i++) {
+      const gx  = x + p.random(-55*pm, 55*pm);
+      const gy  = y + p.random(-55*pm, 55*pm);
+      const gr  = p.random(0.5, 2.2 + pm*4);
+      const sat = Math.min(100, s*(0.5 + pm*0.7));
+      const bri = Math.min(100, b*(0.3 + pm*0.5));
+      p.noStroke();
+      p.fill(h+p.random(-20,20), sat, bri, alpha*(0.6+p.random(0.5)));
+      p.ellipse(gx, gy, gr*2, gr*1.1);
+    }
+  }
+
+  // HUMEDAD — velos y lluvia
+  // Color: azul-gris translucido, mas intenso cuanto mas humedo
+  // Baja humedad (42% hoy): velo muy ligero, casi imperceptible
+  function paintHumidity(t) {
+    const [h, s, b] = PAL.humidity;
+    const hum       = C.humidity_norm;
+    if (hum < 0.35 && p.random() > hum*2.5) return;
+
+    const isRain  = hum > 0.62;
+    const [x, y] = isRain ? [p.random(W*0.1,W*0.9), p.random(H*0.05,H*0.9)]
+                           : (p.random()<0.5 ? sampleZone() : sampleEdge());
+    const alpha   = isRain ? 10 + hum*28 : 5 + hum*14;
+    const sat     = Math.min(100, s*(0.3 + hum*0.6));
+    const bri     = Math.min(100, b*(0.6 + hum*0.4));
+
+    if (isRain) {
+      const len = 18 + hum*48 + p.random(12);
+      p.noFill();
+      p.stroke(h, sat, bri, alpha);
+      p.strokeWeight(0.5 + hum*0.9);
+      p.line(x, y-len*0.5, x+p.random(-2,2), y+len*0.5);
+    } else {
+      const nVeils = Math.floor(2 + hum*4);
+      for (let i = 0; i < nVeils; i++) {
+        const r = p.random(40, 170+hum*180);
+        p.noStroke();
+        p.fill(h+p.random(-15,15), sat*0.7, Math.min(100,bri+10), alpha*(0.4-i*0.08));
+        p.beginShape();
+        for (let a = 0; a < p.TWO_PI; a += 0.3) {
+          const nr = r*(0.5 + p.noise(Math.cos(a)*0.4+x*0.002, Math.sin(a)*0.4+y*0.002+i)*0.8);
+          p.vertex(x+Math.cos(a)*nr, y+Math.sin(a)*nr);
+        }
+        p.endShape(p.CLOSE);
+      }
+    }
+  }
+
+  // VELADURA FINAL — trazos gestuales rapidos en los bordes
+  function paintFinalGlaze() {
+    const [h, s, b] = PAL.temp;
+    for (let i = 0; i < 16; i++) {
+      const [x, y] = sampleEdge();
+      const len    = p.random(25, 110);
+      const ang    = p.random(p.TWO_PI);
+      p.noFill();
+      p.stroke(h+p.random(-12,12), Math.min(100,s*1.1), Math.min(100,b*1.15), p.random(6,18));
+      p.strokeWeight(p.random(0.4,2.2));
+      p.line(x, y, x+Math.cos(ang)*len, y+Math.sin(ang)*len);
+    }
+  }
+
+  // ── PRIMITIVAS ───────────────────────────────────────────────────
+
+  function brushMark(x, y, bw, bh2, rot, h, s, b, alpha) {
+    p.push(); p.translate(x, y); p.rotate(rot); p.noStroke();
+    for (let i = 0; i < 3; i++) {
+      const f = 1 - i*0.22;
+      p.fill(h+p.random(-8,8), Math.min(100,s*(0.8+p.random(0.25))),
+             Math.min(100,b*(0.7+p.random(0.35))), alpha*(0.24+(2-i)*0.2));
+      p.beginShape();
+      p.vertex(-bw*0.55*f, 0);
+      p.bezierVertex(-bw*0.22*f, -bh2*0.9*f,  bw*0.18*f, -bh2*0.65*f,  bw*0.56*f, 0);
+      p.bezierVertex( bw*0.24*f,  bh2*0.85*f, -bw*0.18*f,  bh2*0.72*f, -bw*0.55*f, 0);
+      p.endShape();
+    }
+    p.pop();
+  }
+
+  function windRibbon(x, y, len, dir, h, s, b, alpha, sw) {
+    p.push(); p.translate(x, y); p.rotate(dir);
+    for (let i = 0; i < 3; i++) {
+      const off = (i-1)*9;
+      p.noFill();
+      p.stroke(h+i*3, Math.min(100,s*(0.85-i*0.1)), Math.min(100,b+10), alpha*(0.65-i*0.14));
+      p.strokeWeight(Math.max(0.2, sw-i*0.4));
+      p.beginShape();
+      p.vertex(-len*0.44, off);
+      p.bezierVertex(-len*0.18, -20+off, len*0.05, 18+off, len*0.36, off);
+      p.bezierVertex( len*0.18,   8+off, -len*0.06, -10+off, -len*0.44, off);
+      p.endShape();
+    }
+    p.pop();
+  }
+
+  // ── UI ───────────────────────────────────────────────────────────
+  function renderMeta() {
+    document.getElementById('title').innerHTML =
+      C.city.toUpperCase() + ' &nbsp;·&nbsp; ' + C.date;
+    document.getElementById('meta').innerHTML =
+      C.temp_c.toFixed(1) + '°C &nbsp;·&nbsp; ' +
+      C.pressure + ' hPa &nbsp;·&nbsp; ' +
+      C.wind_speed.toFixed(1) + ' m/s ' + C.wind_dir_label +
+      ' &nbsp;·&nbsp; PM2.5 ' + C.pm25.toFixed(1) +
+      ' &nbsp;·&nbsp; HR ' + C.humidity + '%';
+  }
+
+  function renderLegend() {
+    const items = [
+      { pal: PAL.temp,     label: 'temperatura ' + C.temp_c.toFixed(0) + '°C',
+         text: 'masas gestuales — mas calor, mas expansion, color mas calido y saturado' },
+      { pal: PAL.pressure, label: 'presion ' + C.pressure + ' hPa',
+         text: 'arcos de contorno — alta presion los abre, baja presion los tensa' },
+      { pal: PAL.wind,     label: 'viento ' + C.wind_speed.toFixed(1) + ' m/s ' + C.wind_dir_label,
+         text: 'cintas direccionales — longitud y opacidad proporcionales a la velocidad' },
+      { pal: PAL.pm,       label: 'PM2.5 ' + C.pm25.toFixed(1),
+         text: 'grano disperso — mas contaminacion, mas erosion en la superficie' },
+      { pal: PAL.humidity, label: 'humedad ' + C.humidity + '%',
+         text: 'velos organicos — humedad alta disuelve bordes y genera lluvia' },
+    ];
+    document.getElementById('legend').innerHTML = items.map(it => {
+      const hex = hsbHex(it.pal);
+      return `<div class="leg">
+        <div class="dot" style="background:${hex}"></div>
+        <div><strong>${it.label}</strong><small>${it.text}</small></div>
+      </div>`;
+    }).join('');
+  }
+
+  function hsbHex([h,s,b]) {
+    const [hh,ss,bb] = [h/360, s/100, b/100];
+    const i=Math.floor(hh*6), f=hh*6-i;
+    const q=bb*(1-ss*f), t2=bb*(1-ss*(1-f)), p2=bb*(1-ss);
+    let r,g,bv;
+    switch(i%6){
+      case 0:r=bb;g=t2;bv=p2;break; case 1:r=q;g=bb;bv=p2;break;
+      case 2:r=p2;g=bb;bv=t2;break; case 3:r=p2;g=q;bv=bb;break;
+      case 4:r=t2;g=p2;bv=bb;break; default:r=bb;g=p2;bv=q;break;
+    }
+    return '#'+[r,g,bv].map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('');
+  }
+
+  function updateProgress() {
+    const names = ['temperatura','presion','viento','contaminacion','humedad'];
+    if (phase < names.length)
+      document.getElementById('progress').textContent =
+        'pintando ' + names[phase] + '... (' + (phase+1) + '/5)';
+  }
+
+});
+</script>
+</body>
+</html>

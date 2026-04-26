@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ATMOSPHERICA</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#080808; display:flex; flex-direction:column;
+          align-items:center; justify-content:center; min-height:100vh;
+          font-family: monospace; }
+  #topbar { width:900px; max-width:calc(100vw - 32px); display:flex;
+             align-items:flex-start; justify-content:space-between; margin-bottom:14px; gap:18px; }
+  #topinfo { display:flex; flex-direction:column; gap:6px; flex:1; min-width:0; }
+  #title { font-size:11px; color:#6d6d6d; letter-spacing:0.14em; }
+  #wrap { position:relative; }
+  canvas { display:block; }
+  #legend { margin-top:18px; display:flex; flex-direction:column;
+             gap:7px; max-width:900px; width:100%; }
+  .leg { display:grid; grid-template-columns:8px 1fr; align-items:start; column-gap:8px;
+          font-size:10px; color:#666; letter-spacing:0.04em; }
+  .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .leg strong { display:block; color:#8a8a8a; font-weight:normal; letter-spacing:0.08em; }
+  .leg small { display:block; color:#555; font-size:9px; line-height:1.45; letter-spacing:0.03em; margin-top:2px; }
+  #meta { font-size:10px; color:#444; letter-spacing:0.08em; line-height:1.7; }
+  #save { margin-top:0; padding:8px 24px; background:transparent;
+           border:1px solid #2a2a2a; color:#555; font-family:monospace;
+           font-size:10px; cursor:pointer; letter-spacing:0.12em;
+           transition: border-color 0.2s, color 0.2s; }
+  #save:hover { border-color:#555; color:#aaa; }
+  #progress { font-size:10px; color:#333; letter-spacing:0.1em; min-height:16px; }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div id="topinfo">
+    <div id="title"></div>
+    <div id="meta"></div>
+    <div id="progress">preparando...</div>
+  </div>
+  <button id="save" onclick="saveImg()">GUARDAR PNG</button>
+</div>
+<div id="wrap">
+  <canvas id="c"></canvas>
+</div>
+<div id="legend"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<script>
+const C = {
+  "city": "Seville",
+  "date": "2026-04-25",
+  "temp_c": 19.58,
+  "pressure": 1015,
+  "wind_speed": 1.79,
+  "wind_dir_label": "O",
+  "pm25": 5.91,
+  "humidity": 78,
+  "temp_norm": 0.426,
+  "pressure_norm": 0.738,
+  "wind_energy": 0.089,
+  "wind_dx": -0.982,
+  "wind_dy": 0.191,
+  "pm_norm": 0.079,
+  "humidity_norm": 0.8,
+  "day_type": "stable",
+  "palette": {
+    "temp": [
+      35,
+      50,
+      80
+    ],
+    "pressure": [
+      40,
+      24,
+      62
+    ],
+    "wind": [
+      200,
+      18,
+      78
+    ],
+    "pm": [
+      85,
+      14,
+      70
+    ],
+    "humidity": [
+      210,
+      14,
+      86
+    ],
+    "bg": [
+      300.0,
+      0.46799999999999997,
+      10.440000000000001
+    ]
+  }
+};
+const W = 900;
+const H = 1100;
+
+function saveImg() {
+  const progress = document.getElementById('progress');
+  const filename = 'atmospherica_' + C.city + '_' + C.date;
+
+  try {
+    if (window.sketch && typeof window.sketch.saveCanvas === 'function') {
+      progress.textContent = 'guardando png...';
+      window.sketch.saveCanvas(filename, 'png');
+      setTimeout(() => {
+        progress.textContent = 'png guardado';
+      }, 500);
+      return;
+    }
+  } catch (err) {
+    console.warn('saveCanvas fallo, usando fallback', err);
+  }
+
+  const cnv = document.getElementById('c');
+  if (!cnv) {
+    progress.textContent = 'no se encontro el canvas';
+    return;
+  }
+
+  const tmp = document.createElement('canvas');
+  tmp.width = cnv.width;
+  tmp.height = cnv.height;
+  const ctx = tmp.getContext('2d');
+  ctx.fillStyle = '#080808';
+  ctx.fillRect(0, 0, tmp.width, tmp.height);
+  ctx.drawImage(cnv, 0, 0);
+
+  const triggerDownload = (url) => {
+    const link = document.createElement('a');
+    link.download = filename + '.png';
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    progress.textContent = 'png guardado';
+  };
+
+  if (tmp.toBlob) {
+    progress.textContent = 'guardando png...';
+    tmp.toBlob((blob) => {
+      if (!blob) {
+        progress.textContent = 'no se pudo generar el png';
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      triggerDownload(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }, 'image/png');
+  } else {
+    triggerDownload(tmp.toDataURL('image/png'));
+  }
+}
+
+window.sketch = new p5(function(p) {
+  let phase = 0;
+  let phaseStep = 0;
+  let done = false;
+  const totalPhases = 5;
+  const PHASE_PARTICLES = [340, 180, 210, 120, 140];
+  let focusX = W / 2;
+  let focusY = H / 2;
+  let focusSpread = 250;
+  let outerRadius = 420;
+  let accentX = W / 2;
+  let accentY = H / 2;
+
+  p.setup = function() {
+    let cnv = p.createCanvas(W, H);
+    cnv.elt.id = 'c';
+    cnv.parent('wrap');
+    cnv.elt.style.position = 'absolute';
+    cnv.elt.style.top = '0';
+    cnv.elt.style.left = '0';
+    document.getElementById('wrap').style.width = W + 'px';
+    document.getElementById('wrap').style.height = H + 'px';
+    p.colorMode(p.HSB, 360, 100, 100, 100);
+    configureComposition();
+    paintBackground();
+    renderMeta();
+    renderLegend();
+    updateProgress();
+  };
+
+  p.draw = function() {
+    if (done) {
+      p.noLoop();
+      return;
+    }
+
+    const batch = 18;
+    for (let i = 0; i < batch; i++) {
+      if (phase >= totalPhases) {
+        done = true;
+        document.getElementById('progress').textContent = 'listo - pulsa guardar';
+        break;
+      }
+
+      paintOneParticle(phase, phaseStep);
+      phaseStep++;
+
+      if (phaseStep >= PHASE_PARTICLES[phase]) {
+        phase++;
+        phaseStep = 0;
+        updateProgress();
+      }
+    }
+  };
+
+  function configureComposition() {
+    const cloudFactor = (C.clouds || 0) / 100;
+    focusX = W * (0.5 + C.wind_dx * C.wind_energy * 0.08);
+    focusY = H * (0.48 + C.wind_dy * C.wind_energy * 0.07 + (0.5 - C.pressure_norm) * 0.05 + cloudFactor * 0.035);
+    focusSpread = 170 + (1 - C.pressure_norm) * 115 + C.humidity_norm * 90 + cloudFactor * 85;
+    outerRadius = 330 + C.temp_norm * 120 - cloudFactor * 70;
+    accentX = focusX + C.wind_dx * (80 + C.wind_energy * 90);
+    accentY = focusY + C.wind_dy * (60 + C.wind_energy * 70);
+  }
+
+  function paintBackground() {
+    p.noStroke();
+    const [bh, bs, bb] = C.palette.bg;
+    const cloudFactor = (C.clouds || 0) / 100;
+    const maxR = Math.sqrt(W * W + H * H) * 0.75;
+
+    for (let r = maxR; r > 0; r -= 5) {
+      const t = 1 - r / maxR;
+      p.fill(
+        bh,
+        bs * (0.08 + t * (0.42 - cloudFactor * 0.14)),
+        bb * (0.38 + t * (1.02 - cloudFactor * 0.28)),
+        100
+      );
+      p.ellipse(focusX, focusY, r * (1.36 + cloudFactor * 0.1), r * (1.06 + cloudFactor * 0.22));
+    }
+
+    for (let i = 0; i < 34; i++) {
+      const x1 = p.random(W);
+      const y1 = p.random(H);
+      const x2 = x1 + p.random(-140, 140);
+      const y2 = y1 + p.random(-60, 60);
+      p.stroke(bh, bs * 0.5, bb + 8, 1.2);
+      p.strokeWeight(p.random(18, 42));
+      p.line(x1, y1, x2, y2);
+    }
+    p.noStroke();
+
+    for (let i = 0; i < 90 + Math.floor(cloudFactor * 90); i++) {
+      const x = p.random(W);
+      const y = p.random(H);
+      const d = distanceToFocus(x, y);
+      const alpha = Math.max(0, 3.2 + cloudFactor * 4.5 - d * (3.6 - cloudFactor));
+      p.fill(bh, bs * (0.35 + cloudFactor * 0.15), bb + 10 - cloudFactor * 5, alpha);
+      p.ellipse(x, y, p.random(10, 34 + cloudFactor * 32), p.random(10, 28 + cloudFactor * 22));
+    }
+  }
+
+
+  function paintOneParticle(ph, idx) {
+    const t = idx / PHASE_PARTICLES[ph];
+    if      (ph === 0) paintTemp(t);
+    else if (ph === 1) paintPressure(t);
+    else if (ph === 2) paintWind(t);
+    else if (ph === 3) paintPM(t);
+    else if (ph === 4) paintHumidity(t);
+  }
+
+  function sampleFocusPoint(scale = 1) {
+    const ang = p.random(p.TWO_PI);
+    const rad = Math.abs(p.randomGaussian(0, focusSpread * scale));
+    return {
+      x: focusX + Math.cos(ang) * rad,
+      y: focusY + Math.sin(ang) * rad
+    };
+  }
+
+  function distanceToFocus(x, y) {
+    return p.dist(x, y, focusX, focusY) / Math.max(outerRadius, 1);
+  }
+
+  function paintTemp(t) {
+    const [h, s, b] = C.palette.temp;
+    const temp = C.temp_norm;
+    const cloudFactor = (C.clouds || 0) / 100;
+    const pt = sampleFocusPoint(0.75 + temp * 0.32 + cloudFactor * 0.18);
+    const dist = distanceToFocus(pt.x, pt.y);
+    const rot = p.random(-0.9, 0.9) + Math.atan2(pt.y - focusY, pt.x - focusX) * 0.35;
+    const w = 110 + temp * 190 + p.random(55) - cloudFactor * 25;
+    const hgt = 24 + temp * 54 + p.random(18);
+    const alpha = Math.max(6, 16 + temp * 24 - dist * 7 - cloudFactor * 3);
+    drawBrushMark(pt.x, pt.y, w, hgt, rot, h, s, b, alpha);
+  }
+
+  function paintPressure(t) {
+    const [h, s, b] = C.palette.pressure;
+    const pnorm = C.pressure_norm;
+    const cloudFactor = (C.clouds || 0) / 100;
+    const pt = pnorm > 0.5 ? sampleFocusPoint(0.82 + cloudFactor * 0.18) : sampleEdgePoint();
+    const baseRadius = pnorm > 0.5
+      ? p.random(90, 250 + cloudFactor * 40)
+      : p.random(24, 105);
+    const start = p.random(p.TWO_PI);
+    const span = pnorm > 0.5
+      ? p.random(p.PI * 0.65, p.PI * 1.6)
+      : p.random(p.PI * 1.1, p.PI * 2.2);
+    const alpha = 6 + pnorm * 13 + cloudFactor * 2;
+
+    drawContourBand(pt.x, pt.y, baseRadius, start, span, h, s, b, alpha, pnorm);
+  }
+
+  function sampleEdgePoint() {
+    const margin = p.random(80, 180);
+    const side = Math.floor(p.random(4));
+    if (side === 0) return { x: p.random(W), y: margin };
+    if (side === 1) return { x: W - margin, y: p.random(H) };
+    if (side === 2) return { x: p.random(W), y: H - margin };
+    return { x: margin, y: p.random(H) };
+  }
+
+  function paintWind(t) {
+    const [h, s, b] = C.palette.wind;
+    const we = C.wind_energy;
+    const baseAngle = Math.atan2(C.wind_dy, C.wind_dx);
+    const cloudFactor = (C.clouds || 0) / 100;
+    const pt = sampleFocusPoint(1.05 + we * 0.45 + cloudFactor * 0.12);
+    const dir = baseAngle + (p.noise(pt.x * 0.004, pt.y * 0.004, 10) - 0.5) * (0.22 + (1 - we) * 0.32 + cloudFactor * 0.08);
+    const len = 90 + we * 210 + p.random(40);
+    const alpha = 4 + we * 20;
+    drawWindRibbon(pt.x, pt.y, len, dir, h, s, b, alpha, cloudFactor);
+  }
+
+  function paintPM(t) {
+    const [h, s, b] = C.palette.pm;
+    const pm = C.pm_norm;
+    if (pm < 0.12 && p.random() > 0.18) return;
+
+    const cloudFactor = (C.clouds || 0) / 100;
+    const pt = sampleFocusPoint(0.95 + pm * 0.9 + cloudFactor * 0.15);
+    const size = 16 + pm * 42 + p.random(18);
+    const alpha = 2 + pm * 16 + cloudFactor * 2;
+    drawDustBlot(pt.x, pt.y, size, h, s, b, alpha);
+  }
+
+  function paintHumidity(t) {
+    const [h, s, b] = C.palette.humidity;
+    const hum = C.humidity_norm;
+    const cloudFactor = (C.clouds || 0) / 100;
+    const pt = hum > 0.62 ? sampleRainPoint() : sampleFocusPoint(1.08 + cloudFactor * 0.28);
+    const alpha = hum > 0.62 ? 8 + hum * 18 + cloudFactor * 3 : 3 + hum * 8 + cloudFactor * 2;
+
+    if (hum > 0.62) {
+      const len = 20 + hum * 42 + cloudFactor * 12 + p.random(10);
+      p.noFill();
+      p.stroke(h, s, b, alpha);
+      p.strokeWeight(0.55 + hum * 0.8);
+      p.line(pt.x, pt.y - len * 0.54, pt.x + p.random(-1.5, 1.5), pt.y + len * 0.56);
+    } else {
+      const w = 70 + hum * 130 + cloudFactor * 90 + p.random(35);
+      const hgt = 18 + hum * 30 + cloudFactor * 16 + p.random(12);
+      drawSoftWash(pt.x, pt.y, w, hgt, h, s, b, alpha);
+    }
+  }
+
+  function drawBrushMark(x, y, w, hgt, rot, h, s, b, alpha) {
+    p.push();
+    p.translate(x, y);
+    p.rotate(rot);
+    for (let i = 0; i < 3; i++) {
+      const f = 1 - i * 0.22;
+      p.noStroke();
+      p.fill(h, s * (0.82 - i * 0.1), Math.min(100, b + 8 - i * 3), alpha * (0.18 + (2 - i) * 0.14));
+      p.beginShape();
+      p.vertex(-w * 0.55 * f, 0);
+      p.bezierVertex(-w * 0.22 * f, -hgt * 0.9 * f, w * 0.18 * f, -hgt * 0.65 * f, w * 0.56 * f, 0);
+      p.bezierVertex(w * 0.24 * f, hgt * 0.85 * f, -w * 0.18 * f, hgt * 0.72 * f, -w * 0.55 * f, 0);
+      p.endShape();
+    }
+    p.pop();
+  }
+
+  function drawContourBand(x, y, r, start, span, h, s, b, alpha, pnorm) {
+    for (let i = 0; i < 3; i++) {
+      const mul = 1 + i * 0.22;
+      p.noFill();
+      p.stroke(h, s * (0.95 - i * 0.12), Math.min(100, b + i * 5), alpha * (0.55 - i * 0.12));
+      p.strokeWeight(1.2 - i * 0.18 + pnorm * 0.4);
+      p.arc(x, y, r * 2.4 * mul, r * 1.45 * mul, start + i * 0.08, start + span - i * 0.04);
+    }
+  }
+
+  function drawWindRibbon(x, y, len, dir, h, s, b, alpha, cloudFactor) {
+    p.push();
+    p.translate(x, y);
+    p.rotate(dir);
+    for (let i = 0; i < 3; i++) {
+      const offset = (i - 1) * (8 + cloudFactor * 6);
+      p.noFill();
+      p.stroke(h, s * (0.85 - i * 0.12), Math.min(100, b + 10), alpha * (0.6 - i * 0.14));
+      p.strokeWeight(2.2 - i * 0.5);
+      p.beginShape();
+      p.vertex(-len * 0.42, offset);
+      p.bezierVertex(-len * 0.18, -22 + offset, len * 0.04, 18 + offset, len * 0.34, offset);
+      p.bezierVertex(len * 0.18, 8 + offset, -len * 0.06, -10 + offset, -len * 0.42, offset);
+      p.endShape();
+    }
+    p.pop();
+  }
+
+  function drawDustBlot(x, y, size, h, s, b, alpha) {
+    p.push();
+    p.translate(x, y);
+    p.rotate(p.random(p.TWO_PI));
+    p.noStroke();
+    for (let i = 0; i < 3; i++) {
+      const f = 1 - i * 0.22;
+      p.fill(h, s * (0.8 - i * 0.18), b + i * 4, alpha * (0.7 - i * 0.18));
+      p.beginShape();
+      for (let a = 0; a < p.TWO_PI; a += p.PI / 4) {
+        const rr = size * f * (0.72 + p.noise(Math.cos(a) * 0.7 + i, Math.sin(a) * 0.7 + i) * 0.55);
+        p.vertex(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      p.endShape(p.CLOSE);
+    }
+    p.pop();
+  }
+
+  function drawSoftWash(x, y, w, hgt, h, s, b, alpha) {
+    p.noStroke();
+    for (let i = 0; i < 4; i++) {
+      const f = 1 + i * 0.22;
+      p.fill(h, s * 0.7, Math.min(100, b + 4), alpha * (0.32 - i * 0.06));
+      p.ellipse(x + p.random(-8, 8), y + p.random(-6, 6), w * f, hgt * f);
+    }
+  }
+
+  function paintFinalGlaze() {
+    const [th, ts, tb] = C.palette.temp;
+    const [hh, hs, hb] = C.palette.humidity;
+    for (let i = 0; i < 9; i++) {
+      const mix = i / 8;
+      const x = p.lerp(focusX, accentX, mix) + p.random(-28, 28);
+      const y = p.lerp(focusY, accentY, mix) + p.random(-34, 34);
+      const w = 180 + p.random(120) + mix * 90;
+      const h = 42 + p.random(30);
+      p.noStroke();
+      p.fill(
+        p.lerp(th, hh, 0.45),
+        p.lerp(ts * 0.4, hs * 0.8, 0.55),
+        p.lerp(tb, hb, 0.35),
+        2.4 + C.humidity_norm * 2.6
+      );
+      p.ellipse(x, y, w, h);
+    }
+  }
+
+  function sampleRainPoint() {
+    return {
+      x: p.random(W * 0.12, W * 0.88),
+      y: p.random(H * 0.08, H * 0.88)
+    };
+  }
+
+  function renderMeta() {
+    document.getElementById('title').innerHTML =
+      C.city.toUpperCase() + ' &nbsp;·&nbsp; ' + C.date;
+    document.getElementById('meta').innerHTML =
+      C.temp_c.toFixed(1) + '°C &nbsp;·&nbsp; ' +
+      C.pressure + ' hPa &nbsp;·&nbsp; ' +
+      C.wind_speed.toFixed(1) + ' m/s ' + C.wind_dir_label +
+      ' &nbsp;·&nbsp; PM2.5 ' + C.pm25.toFixed(1) +
+      ' &nbsp;·&nbsp; HR ' + C.humidity + '%';
+  }
+
+  function renderLegend() {
+    const items = [
+      {
+        color: hsbToHex(C.palette.temp),
+        title: 'temperatura ' + C.temp_c.toFixed(0) + '°C',
+        text: 'las masas elipticas marcan la energia termica: mas calor, mas expansion y brillo'
+      },
+      {
+        color: hsbToHex(C.palette.pressure),
+        title: 'presion ' + C.pressure + ' hPa',
+        text: 'los arcos ordenan o tensan la composicion segun la estabilidad atmosferica'
+      },
+      {
+        color: hsbToHex(C.palette.wind),
+        title: 'viento ' + C.wind_speed.toFixed(1) + ' m/s',
+        text: 'los gestos lineales indican direccion y fuerza del barrido del aire'
+      },
+      {
+        color: hsbToHex(C.palette.pm),
+        title: 'pm2.5 ' + C.pm25.toFixed(1),
+        text: 'el grano suspendido vuelve el aire mas limpio o mas turbio'
+      },
+      {
+        color: hsbToHex(C.palette.humidity),
+        title: 'humedad ' + C.humidity + '%',
+        text: 'los velos y caidas suavizan la escena cuando el aire esta mas cargado'
+      }
+    ];
+
+    document.getElementById('legend').innerHTML = items.map(it =>
+      `<div class="leg">
+        <div class="dot" style="background:${it.color}"></div>
+        <div>
+          <strong>${it.title}</strong>
+          <small>${it.text}</small>
+        </div>
+      </div>`
+    ).join('');
+  }
+
+  function hsbToHex(hsb) {
+    const [h, s, b] = [hsb[0] / 360, hsb[1] / 100, hsb[2] / 100];
+    const i = Math.floor(h * 6);
+    const f = h * 6 - i;
+    const q = b * (1 - s * f);
+    const t2 = b * (1 - s * (1 - f));
+    const p2 = b * (1 - s);
+    let r, g, bv;
+
+    switch (i % 6) {
+      case 0: r = b; g = t2; bv = p2; break;
+      case 1: r = q; g = b; bv = p2; break;
+      case 2: r = p2; g = b; bv = t2; break;
+      case 3: r = p2; g = q; bv = b; break;
+      case 4: r = t2; g = p2; bv = b; break;
+      default: r = b; g = p2; bv = q; break;
+    }
+
+    return '#' + [r, g, bv]
+      .map(v => Math.round(v * 255).toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  function updateProgress() {
+    const names = ['temperatura', 'presion', 'viento', 'contaminacion', 'humedad'];
+    if (phase < totalPhases) {
+      document.getElementById('progress').textContent =
+        'pintando ' + names[phase] + '... (' + (phase + 1) + '/' + totalPhases + ')';
+    } else {
+      paintFinalGlaze();
+    }
+  }
+});
+</script>
+</body>
+</html>

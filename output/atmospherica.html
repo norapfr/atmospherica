@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ATMOSPHERICA</title>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+
+body{
+  background:#06060a;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+  font-family:Courier New, monospace;
+  color:#777;
+}
+
+/* =========================
+   TOP BAR (GALERÍA STYLE)
+========================= */
+#topbar{
+  width:900px;
+  max-width:calc(100vw - 40px);
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  margin-bottom:16px;
+  gap:20px;
+}
+
+#title{
+  font-size:11px;
+  letter-spacing:0.25em;
+  color:#8a8a8a;
+  margin-bottom:6px;
+}
+
+#meta{
+  font-size:10px;
+  line-height:1.8;
+  color:#555;
+  letter-spacing:0.08em;
+}
+
+#status{
+  font-size:9px;
+  color:#333;
+  margin-top:6px;
+  letter-spacing:0.15em;
+}
+
+/* =========================
+   SAVE BUTTON
+========================= */
+#save{
+  padding:8px 18px;
+  border:1px solid #1c1c1c;
+  background:transparent;
+  color:#555;
+  font-size:9px;
+  letter-spacing:0.15em;
+  cursor:pointer;
+  transition:0.2s;
+  white-space:nowrap;
+}
+
+#save:hover{
+  border-color:#666;
+  color:#aaa;
+}
+
+/* =========================
+   CANVAS WRAP
+========================= */
+#wrap{
+  position:relative;
+  width:900px;
+  height:1100px;
+  background:#06060a;
+}
+
+/* =========================
+   LEGEND PANEL (MUY LIMPIO)
+========================= */
+#legend{
+  width:900px;
+  max-width:calc(100vw - 40px);
+  margin-top:18px;
+  padding-top:14px;
+  border-top:1px solid #151515;
+
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px 30px;
+}
+
+.leg{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+}
+
+.dot{
+  width:8px;
+  height:8px;
+  border-radius:2px;
+  margin-top:4px;
+  flex-shrink:0;
+}
+
+.leg strong{
+  display:block;
+  font-size:9.5px;
+  color:#888;
+  letter-spacing:0.12em;
+  margin-bottom:2px;
+}
+
+.leg small{
+  font-size:8.5px;
+  color:#444;
+  line-height:1.5;
+  letter-spacing:0.05em;
+}
+
+canvas{display:block;}
+
+</style>
+</head>
+
+<body>
+
+<div id="topbar">
+  <div>
+    <div id="title"></div>
+    <div id="meta"></div>
+    <div id="status">preparando...</div>
+  </div>
+
+  <button id="save">GUARDAR PNG</button>
+</div>
+
+<div id="wrap"></div>
+<div id="legend"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+
+<script>
+
+const C = {"city": "Seville", "date": "2026-04-26", "temp_c": 20.52, "pressure": 1016, "wind_speed": 4.92, "pm25": 3.05};
+const W = 900, H = 1100;
+
+/* =========================
+   SAVE FIX
+========================= */
+document.getElementById("save").onclick = () => {
+  const cnv = document.querySelector("canvas");
+
+  const tmp = document.createElement("canvas");
+  tmp.width = cnv.width;
+  tmp.height = cnv.height;
+
+  const ctx = tmp.getContext("2d");
+  ctx.fillStyle = "#06060a";
+  ctx.fillRect(0,0,tmp.width,tmp.height);
+  ctx.drawImage(cnv,0,0);
+
+  tmp.toBlob(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `atmospherica_${C.city}_${C.date}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+};
+
+/* =========================
+   SIMPLE GRID ANTI OVERLAP
+========================= */
+const GRID = {};
+const SIZE = 90;
+
+function key(x,y){
+  return `${Math.floor(x/SIZE)}_${Math.floor(y/SIZE)}`;
+}
+
+function free(x,y){
+  return !GRID[key(x,y)];
+}
+
+function occupy(x,y){
+  GRID[key(x,y)] = 1;
+}
+
+/* =========================
+   P5
+========================= */
+new p5(sk=>{
+
+let passes=[], idx=0, done=false;
+
+sk.setup = ()=>{
+  let c = sk.createCanvas(W,H);
+  c.parent("wrap");
+
+  sk.colorMode(sk.HSB,360,100,100,100);
+
+  buildUI();
+  buildPasses();
+};
+
+sk.draw = ()=>{
+  if(done) return;
+
+  const p = passes[idx];
+  if(!p){ done=true; return; }
+
+  for(let i=0;i<6;i++){
+    if(p.i>=p.total){ idx++; return; }
+
+    p.fn(p.i/p.total);
+    p.i++;
+  }
+};
+
+/* =========================
+   SAFE POSITION
+========================= */
+function pos(){
+  let x,y,t=0;
+  do{
+    x = sk.random(60,W-60);
+    y = sk.random(60,H-60);
+    t++;
+  } while(!free(x,y) && t<15);
+
+  occupy(x,y);
+  return [x,y];
+}
+
+/* =========================
+   PASSES ARTÍSTICOS
+========================= */
+function buildPasses(){
+
+passes = [
+
+{
+  name:"temperatura",
+  total:420,
+  i:0,
+  fn:(t)=>{
+    const [x,y] = pos();
+
+    sk.noStroke();
+    sk.fill(40+t*80,80,90,18);
+
+    sk.push();
+    sk.translate(x,y);
+    sk.rotate(sk.random());
+
+    const s = 40 + t*120;
+    sk.rect(-s/2,-s/2,s,s*0.6);
+    sk.pop();
+  }
+},
+
+{
+  name:"viento",
+  total:220,
+  i:0,
+  fn:()=>{
+    const [x,y] = pos();
+
+    sk.stroke(200,60,90,18);
+    sk.line(x,y,x+sk.random(-120,120),y+sk.random(-120,120));
+  }
+},
+
+{
+  name:"atm",
+  total:300,
+  i:0,
+  fn:()=>{
+    const [x,y] = pos();
+
+    sk.noStroke();
+    sk.fill(0,0,100,6);
+    sk.ellipse(x,y,sk.random(10,40));
+  }
+}
+
+];
+
+}
+
+/* =========================
+   UI
+========================= */
+function buildUI(){
+
+  document.getElementById("title").innerText =
+    `ATMOSPHERICA · ${C.city.toUpperCase()} · ${C.date}`;
+
+  document.getElementById("meta").innerHTML =
+    `${C.temp_c.toFixed(1)}°C · ${C.pressure} hPa · ` +
+    `${C.wind_speed.toFixed(1)} m/s · PM2.5 ${C.pm25}`;
+
+  const legend = [
+    ["temperatura","formas y escala visual del calor del día"],
+    ["viento","dirección y energía cinética del aire"],
+    ["partículas","ruido atmosférico y contaminación"],
+  ];
+
+  document.getElementById("legend").innerHTML =
+    legend.map(([t,d])=>`
+      <div class="leg">
+        <div class="dot" style="background:#888"></div>
+        <div>
+          <strong>${t}</strong>
+          <small>${d}</small>
+        </div>
+      </div>
+    `).join("");
+
+}
+
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ATMOSPHERICA - FLOW PAINTING</title>
+
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#080808;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    font-family: monospace;
+    color:#666;
+  }
+
+  #wrap { position:relative; }
+  canvas { display:block; }
+
+  #top {
+    width:900px;
+    display:flex;
+    justify-content:space-between;
+    margin-bottom:12px;
+    font-size:10px;
+    letter-spacing:0.12em;
+  }
+
+  button {
+    background:transparent;
+    border:1px solid #2a2a2a;
+    color:#666;
+    padding:8px 16px;
+    font-size:10px;
+    cursor:pointer;
+  }
+
+  button:hover {
+    border-color:#555;
+    color:#aaa;
+  }
+</style>
+</head>
+
+<body>
+
+<div id="top">
+  <div id="meta"></div>
+  <button onclick="saveImg()">GUARDAR</button>
+</div>
+
+<div id="wrap"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+
+<script>
+const C = {"city": "Seville", "date": "2026-04-25", "temp_c": 24.24, "wind_speed": 1.03, "wind_dx": 0.17364817766693028, "wind_dy": 0.984807753012208, "wind_energy": 0.051500000000000004, "pressure_norm": 0.72, "temp_norm": 0.5269565217391304, "humidity_norm": 0.45, "pm_norm": 0.1076};
+const W = 900;
+const H = 1100;
+
+function saveImg() {
+  saveCanvas('atmospherica_flow_' + C.city + '_' + C.date, 'png');
+}
+
+new p5(function(p) {
+
+  p.setup = function() {
+    let cnv = p.createCanvas(W, H);
+    cnv.parent('wrap');
+    p.background(10);
+    p.colorMode(p.HSB, 360, 100, 100, 100);
+
+    document.getElementById('meta').innerHTML =
+      C.city.toUpperCase() + ' · ' + C.date +
+      ' · ' + C.temp_c.toFixed(1) + '°C' +
+      ' · wind ' + C.wind_speed.toFixed(1);
+
+    renderFrame();
+  };
+
+  function renderFrame() {
+    for (let i = 0; i < 12000; i++) {
+      paintStroke();
+    }
+  }
+
+  function paintStroke() {
+    let x = p.random(W);
+    let y = p.random(H);
+
+    let n = p.noise(x * 0.002, y * 0.002);
+
+    let windX = C.wind_dx * C.wind_energy * 2.5;
+    let windY = C.wind_dy * C.wind_energy * 2.5;
+
+    let tempForce = (C.temp_norm - 0.5) * 3.0;
+    let pressureStability = (1 - C.pressure_norm) * 2.0;
+    let pollutionChaos = C.pm_norm * 4.0;
+
+    let angle = n * Math.PI * 4;
+
+    let vx =
+      Math.cos(angle) +
+      windX +
+      tempForce -
+      pressureStability +
+      (p.random() - 0.5) * pollutionChaos;
+
+    let vy =
+      Math.sin(angle) +
+      windY +
+      tempForce -
+      pressureStability +
+      (p.random() - 0.5) * pollutionChaos;
+
+    let hue = (200
+      + C.temp_norm * 60
+      - C.pm_norm * 80
+      + C.humidity_norm * 40) % 360;
+
+    let sat = 25 + C.wind_energy * 50;
+    let bri = 20 + C.temp_norm * 60;
+
+    let alpha = 6 + C.humidity_norm * 20;
+    let size = 1 + C.pm_norm * 6 + C.wind_energy * 2;
+
+    p.stroke(hue, sat, bri, alpha);
+    p.strokeWeight(size);
+
+    p.point(x + vx * 2, y + vy * 2);
+  }
+
+});
+</script>
+
+</body>
+</html>
