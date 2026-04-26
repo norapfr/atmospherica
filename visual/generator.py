@@ -1,659 +1,763 @@
-import json
-import os
-import math
-from datetime import datetime
+"""
+ATMOSPHERICA — Motor de abstracción lírica climática
+Cada variable climática = familia de formas propia.
+Misma gramática visual, composición única cada día.
+"""
 
+import json, os, math, webbrowser
+from datetime import datetime
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>ATMOSPHERICA</title>
+<title>ATMOSPHERICA · {city}</title>
 <style>
-  * {{ margin:0; padding:0; box-sizing:border-box; }}
-  body {{ background:#06060a; display:flex; flex-direction:column;
-          align-items:center; justify-content:center; min-height:100vh;
-          font-family:'Courier New', monospace; }}
-  #topbar {{ width:900px; max-width:calc(100vw - 32px); display:flex;
-             align-items:flex-start; justify-content:space-between;
-             margin-bottom:12px; gap:18px; }}
-  #topinfo {{ display:flex; flex-direction:column; gap:4px; flex:1; }}
-  #title {{ font-size:11px; color:#5a5a5a; letter-spacing:0.18em; }}
-  #meta  {{ font-size:9.5px; color:#383838; letter-spacing:0.1em; line-height:1.8; }}
-  #progress {{ font-size:9px; color:#222; letter-spacing:0.1em; }}
-  #wrap {{ position:relative; }}
-  canvas {{ display:block; }}
-  #legend {{ margin-top:14px; display:flex; flex-direction:column;
-             gap:6px; max-width:900px; width:100%; }}
-  .leg {{ display:grid; grid-template-columns:9px 1fr; column-gap:9px;
-          align-items:start; font-size:9.5px; color:#444; letter-spacing:0.04em; }}
-  .dot {{ width:9px; height:9px; border-radius:2px; margin-top:2px; }}
-  .leg strong {{ display:block; color:#686868; font-weight:normal; letter-spacing:0.08em; }}
-  .leg small {{ display:block; color:#383838; font-size:8.5px; line-height:1.45; margin-top:1px; }}
-  #save {{ padding:7px 20px; background:transparent; border:1px solid #181818;
-           color:#383838; font-family:monospace; font-size:9px; cursor:pointer;
-           letter-spacing:0.14em; transition:all 0.2s; white-space:nowrap; }}
-  #save:hover {{ border-color:#555; color:#999; }}
+  *{{margin:0;padding:0;box-sizing:border-box;}}
+  body{{
+    background:#f5f0e8;
+    font-family:'Courier New',monospace;
+    display:flex;flex-direction:column;align-items:center;
+    padding:24px 16px 36px;min-height:100vh;
+  }}
+  #header{{
+    width:100%;max-width:880px;
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-bottom:18px;padding-bottom:10px;
+    border-bottom:1px solid #c8c0b0;
+  }}
+  #city{{font-size:10px;color:#7a7060;letter-spacing:.28em;text-transform:uppercase;}}
+  #dateline{{font-size:9px;color:#a09880;letter-spacing:.14em;}}
+  #canvas-wrap{{width:100%;max-width:880px;box-shadow:0 2px 40px rgba(0,0,0,0.12);}}
+  canvas{{display:block;width:100%;height:auto;}}
+  #legend{{
+    width:100%;max-width:880px;margin-top:28px;
+    border-top:1px solid #d8d0c0;padding-top:22px;
+  }}
+  #legend h2{{
+    font-size:8px;color:#b0a890;letter-spacing:.28em;text-transform:uppercase;
+    margin-bottom:18px;font-weight:normal;
+  }}
+  .leg-section{{margin-bottom:20px;}}
+  .leg-section-title{{
+    font-size:8px;color:#9a9080;letter-spacing:.22em;text-transform:uppercase;
+    margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e8e0d0;
+  }}
+  .leg-rows{{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 24px;}}
+  .leg{{display:flex;gap:10px;align-items:flex-start;}}
+  .swatch-stack{{display:flex;flex-direction:column;gap:2px;flex-shrink:0;margin-top:2px;}}
+  .swatch{{width:10px;height:10px;border-radius:50%;flex-shrink:0;}}
+  .swatch-rect{{width:18px;height:8px;border-radius:1px;flex-shrink:0;margin-top:2px;}}
+  .ltext{{font-size:8px;color:#6a6050;letter-spacing:.04em;line-height:1.8;}}
+  .ltext strong{{color:#2a2018;font-weight:normal;display:block;letter-spacing:.08em;font-size:8.5px;}}
+  .ltext em{{color:#9a9080;font-style:normal;font-size:7.5px;}}
+  .val{{
+    display:inline-block;background:#ece8e0;color:#5a5040;
+    padding:1px 5px;border-radius:2px;font-size:7.5px;letter-spacing:.06em;
+    margin-left:4px;
+  }}
+  .ring-diagram{{
+    display:flex;align-items:center;gap:6px;margin:6px 0 2px;
+  }}
+  .ring-label{{font-size:7px;color:#8a8070;letter-spacing:.06em;}}
+  #footer{{
+    width:100%;max-width:880px;margin-top:14px;
+    display:flex;justify-content:space-between;align-items:center;
+  }}
+  #edition{{font-size:8px;color:#b0a890;letter-spacing:.18em;}}
+  #save{{
+    padding:6px 20px;background:transparent;
+    border:1px solid #c0b8a8;color:#8a8070;
+    font-family:monospace;font-size:8px;letter-spacing:.18em;cursor:pointer;transition:.2s;
+  }}
+  #save:hover{{border-color:#7a7060;color:#3a3028;}}
+  #status{{font-size:8px;color:#b0a890;letter-spacing:.1em;min-height:14px;margin-top:4px;text-align:right;}}
 </style>
 </head>
 <body>
-<div id="topbar">
-  <div id="topinfo">
-    <div id="title"></div>
-    <div id="meta"></div>
-    <div id="progress">preparando...</div>
-  </div>
-  <button id="save">GUARDAR PNG</button>
-</div>
-<div id="wrap"><canvas id="c"></canvas></div>
+<div id="header"><div id="city"></div><div id="dateline"></div></div>
+<div id="canvas-wrap"><canvas id="c" width="880" height="1040"></canvas></div>
 <div id="legend"></div>
+<div id="footer">
+  <div id="edition"></div>
+  <div><button id="save" onclick="saveImg()">GUARDAR PNG</button><div id="status"></div></div>
+</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
 <script>
 const C = {climate_json};
-const W = 900, H = 1100;
-function saveImg() {{
-  document.getElementById('progress').textContent = 'guardando...';
 
-  const cnv = window._canvas;  // 👈 en vez de sk.canvas
-
-  cnv.toBlob(function(blob) {{
-    if (!blob) {{
-      document.getElementById('progress').textContent = 'error al guardar';
-      return;
-    }}
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-
-    a.download = 'atmospherica_' + C.city + '_' + C.date + '.png';
-    a.href = url;
-
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-    document.getElementById('progress').textContent = 'guardado';
-  }}, 'image/png');
+// ── Seeded RNG ────────────────────────────────────────────────────────────
+function seededRng(seed){{
+  let s=seed>>>0;
+  return ()=>{{s^=s<<13;s^=s>>>17;s^=s<<5;return(s>>>0)/4294967296;}};
 }}
-window.saveImg = saveImg;
-new p5(sk => {{
+let sv=0;
+const ks=C.date.replace(/-/g,'')+C.hour+C.city;
+for(let i=0;i<ks.length;i++) sv=(sv*31+ks.charCodeAt(i))|0;
+const SR=seededRng(Math.abs(sv)||99991);
+const rnd=(a,b)=>a+SR()*(b-a);
+const ri=(a,b)=>Math.floor(rnd(a,b+1));
+const rp=arr=>arr[Math.floor(SR()*arr.length)];
+const TAU=Math.PI*2;
 
-  let passes = [], passIdx = 0, done = false;
-
-  // ═══════════════════════════════════════════════════════════════
-  // PALETA — temperatura + hora mandan en el color
-  // El fondo SIEMPRE es oscuro (max brillo 18).
-  // Las formas tienen brillo moderado para destacar sobre negro.
-  // ═══════════════════════════════════════════════════════════════
-  function buildPalette() {{
-    const t   = C.temp_norm;
-    const h   = C.hour;
-    const cld = C.cloud_norm;
-
-    // Hue base segun hora — solo afecta al tinte, no al brillo del fondo
-    let timeHue, timeSat;
-    if      (h < 5)  {{ timeHue = 230; timeSat = 50; }}  // madrugada: azul
-    else if (h < 8)  {{ timeHue = 280; timeSat = 45; }}  // alba: malva
-    else if (h < 11) {{ timeHue = 40;  timeSat = 40; }}  // manana: ocre
-    else if (h < 15) {{ timeHue = 48;  timeSat = 35; }}  // mediodia: ambar
-    else if (h < 19) {{ timeHue = 28;  timeSat = 55; }}  // tarde: naranja
-    else if (h < 22) {{ timeHue = 18;  timeSat = 50; }}  // atardecer
-    else             {{ timeHue = 220; timeSat = 45; }}  // noche
-
-    // Temperatura desplaza el hue: frio→azul, calor→rojo
-    const tempShift = (t - 0.5) * 65;
-    const fHue      = (timeHue + tempShift + 360) % 360;
-    const fSat      = Math.min(100, timeSat + t * 28);
-    const cloudD    = cld * 0.32;
-
-    // Brillo de las formas: oscuro incluso en mediodia, luminoso en calor
-    // Rango seguro: 8–55 para que el fondo negro domine siempre
-    const formBri   = Math.max(8, Math.min(55, 12 + t * 42 - cld * 12));
-
-    return {{
-      // Color principal de las formas (temperatura + hora)
-      primary:    [fHue,          fSat*(1-cloudD),        formBri],
-      // Complementario — ~150° de diferencia
-      complement: [(fHue+150+t*28)%360, fSat*0.68*(1-cloudD), formBri*0.78],
-      // Acento — alta saturacion para destellos
-      accent:     [(fHue+218+t*18)%360, Math.min(100,fSat*1.28), Math.min(62,formBri*1.18)],
-      // Oscuro — capas profundas de las formas
-      dark:       [fHue,          fSat*0.38*(1-cloudD),   Math.max(4, formBri*0.16)],
-      // Fondo — SIEMPRE muy oscuro, solo un tinte sutil de la hora
-      bg:         [timeHue,       timeSat*0.10,            Math.max(3, 4 + h*0.25)],
-      // Neutro — presion y nubes
-      neutral:    [(fHue+28)%360, 16,                     Math.min(50, formBri*0.62)],
-    }};
-  }}
-document.addEventListener('DOMContentLoaded', () => {{
-  document.getElementById('save').addEventListener('click', saveImg);
-}});
-  // ═══════════════════════════════════════════════════════════════
-  // SETUP
-  // ═══════════════════════════════════════════════════════════════
-  sk.setup = function() {{
-    let cnv = sk.createCanvas(W, H);
-    window._canvas = cnv.canvas; 
-    cnv.elt.id = 'c';
-    cnv.parent('wrap');
-    cnv.elt.style.position = 'absolute';
-    cnv.elt.style.top = '0'; cnv.elt.style.left = '0';
-    document.getElementById('wrap').style.width  = W + 'px';
-    document.getElementById('wrap').style.height = H + 'px';
-    sk.colorMode(sk.HSB, 360, 100, 100, 100);
-    sk.noiseDetail(3, 0.5);
-
-    const pal = buildPalette();
-    paintBackground(pal);
-    buildPasses(pal);
-    renderMeta();
-    renderLegend(pal);
-    updateProgress();
+// ── Paleta cromática ──────────────────────────────────────────────────────
+function buildPalette(){{
+  const t=C.temp_norm, h=C.hour, cld=C.cloud_norm;
+  let hue,sat,lum;
+  if(h<5)       {{hue=240;sat=38;lum=22;}}
+  else if(h<8)  {{hue=22; sat=72;lum=48;}}
+  else if(h<11) {{hue=40; sat=65;lum=60;}}
+  else if(h<15) {{hue=195;sat=48;lum=52;}}
+  else if(h<18) {{hue=30; sat=70;lum=55;}}
+  else if(h<21) {{hue=15; sat=62;lum=40;}}
+  else          {{hue=220;sat=40;lum=25;}}
+  const tShift=(t-0.5)*40;
+  const H1=(hue+tShift+360)%360;
+  const H2=(H1+137)%360;
+  const H3=(H1+210)%360;
+  const H4=(H1+60)%360;
+  const H5=(H1+310)%360;
+  const ds=1-cld*0.3;
+  return {{
+    ink:   `hsl(${{H1}},${{sat*ds}}%,${{lum*0.25}}%)`,
+    A:     `hsl(${{H1}},${{sat*ds}}%,${{lum}}%)`,
+    B:     `hsl(${{H2}},${{(sat+15)*ds}}%,${{lum*1.1}}%)`,
+    C_:    `hsl(${{H3}},${{sat*ds*0.8}}%,${{lum*0.75}}%)`,
+    D:     `hsl(${{H4}},${{sat*ds*1.2}}%,${{lum*1.25}}%)`,
+    E:     `hsl(${{H5}},${{sat*ds*0.9}}%,${{lum*0.9}}%)`,
+    paper: `hsl(${{(H1+30)%360}},12%,93%)`,
+    Aa:(a)=>`hsla(${{H1}},${{sat*ds}}%,${{lum}}%,${{a}})`,
+    Ba:(a)=>`hsla(${{H2}},${{(sat+15)*ds}}%,${{lum*1.1}}%,${{a}})`,
+    Ca:(a)=>`hsla(${{H3}},${{sat*ds*0.8}}%,${{lum*0.75}}%,${{a}})`,
+    Da:(a)=>`hsla(${{H4}},${{sat*ds*1.2}}%,${{lum*1.25}}%,${{a}})`,
+    Ea:(a)=>`hsla(${{H5}},${{sat*ds*0.9}}%,${{lum*0.9}}%,${{a}})`,
   }};
+}}
 
-  // ═══════════════════════════════════════════════════════════════
-  // LOOP
-  // ═══════════════════════════════════════════════════════════════
-  sk.draw = function() {{
-    if (done) {{ sk.noLoop(); return; }}
-    const pass  = passes[passIdx];
-    if (!pass)  {{ finish(); return; }}
-    const batch = Math.ceil(pass.total / 50);
-    const end   = Math.min(pass.drawn + batch, pass.total);
-    for (let i = pass.drawn; i < end; i++) pass.fn(i / Math.max(pass.total-1, 1));
-    pass.drawn = end;
-    if (pass.drawn >= pass.total) {{
-      passIdx++;
-      if (passIdx >= passes.length) finish();
-      else updateProgress();
-    }}
-  }};
+const W=880, H=1040;
+const cv=document.getElementById('c');
+const cx=cv.getContext('2d');
+const P=buildPalette();
 
-  function finish() {{
-    done = true;
-    document.getElementById('progress').textContent = 'listo — pulsa guardar';
-  }}
-
-  // ═══════════════════════════════════════════════════════════════
-  // FONDO — SIEMPRE oscuro, gradiente muy contenido
-  // Solo un tinte sutil del momento del dia emerge desde un punto
-  // Madrugada/noche: casi negro puro
-  // Mediodia: negro con un halo tenue ambar en el centro
-  // ═══════════════════════════════════════════════════════════════
-  function paintBackground(pal) {{
-    const [bh, bs, bb] = pal.bg;
-    const [ph, ps, pb] = pal.primary;
-    const cld  = C.cloud_norm;
-    const hour = C.hour;
-
-    // Base: negro casi puro con tinte minimo
-    sk.noStroke();
-    sk.background(bh, bs, bb);
-
-    // Halo de luz — muy contenido, maximo brillo 14
-    let gx, gy;
-    if      (hour >= 6  && hour < 12) {{ gx = W*0.28; gy = H*0.72; }}
-    else if (hour >= 12 && hour < 17) {{ gx = W*0.5;  gy = H*0.08; }}
-    else if (hour >= 17 && hour < 21) {{ gx = W*0.82; gy = H*0.62; }}
-    else                              {{ gx = W*0.5;  gy = H*0.5;  }}
-
-    const maxR = Math.sqrt(W*W + H*H) * 0.75;
-    for (let r = maxR; r > 0; r -= 9) {{
-      const prog = 1 - r/maxR;
-      // Brillo maximo del halo: 14 — nunca supera eso
-      const haloBri = Math.min(14, pb * (0.08 + prog * 0.22) * (1 - cld*0.4));
-      const haloSat = ps * (0.06 + prog * 0.18);
-      sk.fill(ph, haloSat, haloBri, 100);
-      sk.ellipse(gx, gy, r*1.55, r*1.18);
-    }}
-
-    // Grano de lienzo — textura imprimada muy sutil
-    for (let i = 0; i < 90; i++) {{
-      const x = sk.random(W), y = sk.random(H);
-      const n = sk.noise(x*0.032, y*0.032);
-      sk.fill(ph, ps*0.15, pb*(0.08+n*0.12), sk.random(0.2, 1.2));
-      sk.ellipse(x, y, sk.random(2,11), sk.random(1,7));
+// ── Distribución anti-solapamiento sobre TODO el canvas ───────────────────
+// El centro es candidato prioritario — no forzado, pero siempre en la lista
+function distribuirPuntos(n, mx, my){{
+  const cols=Math.ceil(Math.sqrt(n*W/H))+1;
+  const rows=Math.ceil(cols*H/W)+1;
+  const cands=[];
+  for(let c=0;c<cols;c++){{
+    for(let r=0;r<rows;r++){{
+      const x=mx+(W-2*mx)*(c+0.5)/cols+rnd(-W/(cols*2.5),W/(cols*2.5));
+      const y=my+(H-2*my)*(r+0.5)/rows+rnd(-H/(rows*2.5),H/(rows*2.5));
+      if(x>=mx&&x<=W-mx&&y>=my&&y<=H-my) cands.push([x,y]);
     }}
   }}
+  // Centro como candidato prioritario
+  const cx2=W*0.5+rnd(-W*0.07,W*0.07);
+  const cy2=H*0.5+rnd(-H*0.07,H*0.07);
+  cands.unshift([cx2,cy2]);
+  const [first,...rest]=cands;
+  rest.sort(()=>SR()-0.5);
+  const mixed=[first,...rest];
+  const placed=[];
+  const minD=(W+H)/(n*2.2);
+  for(const[x,y]of mixed){{
+    if(placed.length>=n) break;
+    if(!placed.some(([ex,ey])=>Math.hypot(x-ex,y-ey)<minD)) placed.push([x,y]);
+  }}
+  return placed;
+}}
 
-  // ═══════════════════════════════════════════════════════════════
-  // DISTRIBUCION — zonas que evitan el centro exacto
-  // ═══════════════════════════════════════════════════════════════
-  function zone() {{
-    const z = Math.floor(sk.random(6));
-    switch(z) {{
-      case 0: return [sk.random(W*0.02,W*0.38), sk.random(H*0.03,H*0.42)];
-      case 1: return [sk.random(W*0.58,W*0.97), sk.random(H*0.03,H*0.40)];
-      case 2: return [sk.random(W*0.02,W*0.40), sk.random(H*0.58,H*0.97)];
-      case 3: return [sk.random(W*0.56,W*0.97), sk.random(H*0.56,H*0.97)];
-      case 4: return [sk.random(W*0.08,W*0.92), sk.random(H*0.02,H*0.18)];
-      default:return [sk.random(W*0.08,W*0.92), sk.random(H*0.82,H*0.98)];
+// ── FONDO ─────────────────────────────────────────────────────────────────
+function drawFondo(){{
+  cx.fillStyle=P.paper; cx.fillRect(0,0,W,H);
+  const h=C.hour;
+  let lx,ly;
+  if(h<6)       {{lx=W*.5;ly=H*1.1;}}
+  else if(h<10) {{lx=W*.1;ly=H*.9;}}
+  else if(h<13) {{lx=W*.5;ly=-H*.1;}}
+  else if(h<17) {{lx=W*.9;ly=H*.1;}}
+  else if(h<20) {{lx=W*.9;ly=H*.6;}}
+  else          {{lx=W*.5;ly=H*1.2;}}
+  const g=cx.createRadialGradient(lx,ly,0,lx,ly,W*1.1);
+  g.addColorStop(0,P.Aa(0.18+C.temp_norm*0.14));
+  g.addColorStop(.5,P.Aa(0.06));
+  g.addColorStop(1,P.Ca(0.08));
+  cx.fillStyle=g; cx.fillRect(0,0,W,H);
+  const vg=cx.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,H*.85);
+  vg.addColorStop(0,'rgba(0,0,0,0)');
+  vg.addColorStop(1,'rgba(0,0,0,0.07)');
+  cx.fillStyle=vg; cx.fillRect(0,0,W,H);
+}}
+
+// ── TEMPERATURA — discos concéntricos con color fijo según grados ─────────
+// Escala de color SIEMPRE igual — independiente de hora o paleta del día:
+//   ≤5°C  → azul profundo
+//   6–12  → azul-verde
+//   13–18 → verde-amarillo
+//   19–24 → amarillo-naranja
+//   25–30 → naranja
+//   ≥31°C → rojo
+// Tamaño del disco = magnitud de temperatura (más calor = disco más grande)
+// Los anillos son degradados del mismo color (oscuro exterior → claro interior)
+function drawTemperatura(){{
+  const t=C.temp_norm;
+  const tc=C.temp_c;
+
+  // Escala cromática fija de temperatura — siempre igual en cualquier cuadro
+  function tempColor(offset){{
+    // offset 0=exterior(oscuro) → 1=interior(claro)
+    let h,s,l;
+    if     (tc<=5)  {{h=225; s=70; l=25+offset*30;}}  // azul profundo
+    else if(tc<=12) {{h=200; s=65; l=32+offset*32;}}  // azul-verde
+    else if(tc<=18) {{h=145; s=60; l=35+offset*30;}}  // verde
+    else if(tc<=24) {{h=55;  s=75; l=42+offset*28;}}  // amarillo-naranja
+    else if(tc<=30) {{h=28;  s=80; l=45+offset*25;}}  // naranja
+    else            {{h=5;   s=78; l=40+offset*28;}}  // rojo
+    return `hsl(${{h}},${{s}}%,${{l}}%)`;
+  }}
+
+  const n=ri(3,5);
+  const pts=distribuirPuntos(n,W*.1,H*.08);
+
+  for(let i=0;i<pts.length;i++){{
+    const[x,y]=pts[i];
+    const peso=i===0?1.0:rnd(.35,.75);
+    const R=(55+t*90)*peso;
+    const nAnillos=ri(Math.floor(2+t*3),Math.floor(3+t*5));
+
+    // Anillos: exterior oscuro → interior claro, mismo color siempre
+    for(let a=0;a<nAnillos;a++){{
+      const r=R*(1-a/nAnillos);
+      const offset=a/(nAnillos-1||1); // 0=exterior, 1=interior
+      cx.beginPath(); cx.arc(x,y,r,0,TAU);
+      cx.fillStyle=tempColor(offset);
+      cx.globalAlpha=0.82+a*(0.18/nAnillos);
+      cx.fill(); cx.globalAlpha=1;
+      // Separador tenue entre anillos
+      cx.strokeStyle='rgba(0,0,0,0.12)';
+      cx.lineWidth=0.7; cx.stroke();
+    }}
+
+    // Arco exterior interrumpido — mismo color temperatura
+    const as=rnd(0,TAU), asp=rnd(Math.PI*.5,Math.PI*1.4);
+    cx.beginPath(); cx.arc(x,y,R*1.18,as,as+asp);
+    cx.strokeStyle=tempColor(0);
+    cx.lineWidth=1.4+t*1.5;
+    cx.globalAlpha=0.4+t*.25; cx.stroke(); cx.globalAlpha=1;
+
+    // Segundo arco más sutil
+    if(t>0.4){{
+      const a2=as+Math.PI+rnd(-.5,.5), s2=rnd(Math.PI*.3,Math.PI*.7);
+      cx.beginPath(); cx.arc(x,y,R*1.32,a2,a2+s2);
+      cx.strokeStyle=tempColor(0.3);
+      cx.lineWidth=0.8;
+      cx.globalAlpha=0.22; cx.stroke(); cx.globalAlpha=1;
+    }}
+
+    // Punto focal blanco — siempre igual, marca el centro
+    cx.beginPath(); cx.arc(x,y,Math.max(3,R*.045),0,TAU);
+    cx.fillStyle='rgba(255,255,255,0.92)'; cx.fill();
+  }}
+}}
+
+// ── COLORES FIJOS POR VARIABLE ────────────────────────────────────────────
+// Cada variable tiene su propio hue base. El valor climático controla
+// saturación y luminosidad — más intenso = color más vivo y opaco.
+// Independiente de hora y temperatura.
+
+// Viento → azul (hue 210–225). Más velocidad = azul más oscuro y denso.
+function windColor(a){{
+  const we=C.wind_energy;
+  const s=45+we*40;   // sat: 45% calma → 85% temporal
+  const l=62-we*28;   // lum: 62% calma → 34% temporal
+  return `hsla(215,${{s}}%,${{l}}%,${{a}})`;
+}}
+
+// Presión → ocre/siena (hue 35–42). Más presión = más sólido y cálido.
+function presColor(a){{
+  const p=C.pressure_norm;
+  const s=38+p*38;    // sat: 38% baja → 76% alta
+  const l=58-p*22;    // lum: 58% baja → 36% alta
+  return `hsla(38,${{s}}%,${{l}}%,${{a}})`;
+}}
+
+// Humedad → verde (hue 145–160). Más HR = verde más saturado y profundo.
+function humColor(a){{
+  const h=C.humidity_norm;
+  const s=35+h*50;    // sat: 35% seco → 85% húmedo
+  const l=55-h*25;    // lum: 55% seco → 30% saturado
+  return `hsla(150,${{s}}%,${{l}}%,${{a}})`;
+}}
+
+// Nubes → gris azulado (hue 210). Más cobertura = más gris y opaco.
+function cloudColor(a){{
+  const c=C.cloud_norm;
+  const s=18+c*22;    // sat: casi acromático despejado → gris azulado cubierto
+  const l=65-c*30;    // lum: claro despejado → oscuro cubierto
+  return `hsla(210,${{s}}%,${{l}}%,${{a}})`;
+}}
+
+// PM2.5 → violeta parduzco (hue 280–300). Más contaminación = más oscuro.
+function pmColor(a){{
+  const pm=C.pm_norm;
+  const s=30+pm*50;   // sat: leve → muy saturado
+  const l=52-pm*28;   // lum: claro limpio → oscuro contaminado
+  return `hsla(285,${{s}}%,${{l}}%,${{a}})`;
+}}
+
+// ── VIENTO — curvas Bézier, color azul proporcional a velocidad ───────────
+function drawViento(){{
+  const we=C.wind_energy;
+  const ang=Math.atan2(C.wind_dy,C.wind_dx);
+  const n=ri(12+we*30,22+we*50);
+  for(let i=0;i<n;i++){{
+    const sx=rnd(W*.02,W*.98), sy=rnd(H*.02,H*.98);
+    const len=we<.15?rnd(15,45):rnd(40,180+we*200);
+    const curv=we<.2?rnd(-.8,.8):rnd(-.25,.25);
+    const spread=we<.3?.7:.2;
+    const a=ang+rnd(-spread,spread);
+    const ex=sx+Math.cos(a)*len, ey=sy+Math.sin(a)*len;
+    const cpx=sx+Math.cos(a+Math.PI/2)*len*curv*.5+(ex-sx)*.5;
+    const cpy=sy+Math.sin(a+Math.PI/2)*len*curv*.5+(ey-sy)*.5;
+    const alpha=(0.18+we*.50)*(.6+SR()*.4);
+    cx.beginPath(); cx.moveTo(sx,sy); cx.quadraticCurveTo(cpx,cpy,ex,ey);
+    cx.strokeStyle=windColor(alpha);
+    cx.lineWidth=we<.1?rnd(.4,.8):rnd(.7,1.8+we*2.2);
+    cx.stroke();
+  }}
+}}
+
+// ── PRESIÓN — rectángulos ocre, solidez proporcional a hPa ───────────────
+function drawPresion(){{
+  const p=C.pressure_norm;
+  const nFajas=ri(3,6+p*4);
+  for(let i=0;i<nFajas;i++){{
+    const y=rnd(H*.04,H*.96);
+    const w=p>.6?rnd(W*.35,W*.65):rnd(W*.08,W*.28);
+    const h2=rnd(4,18+p*22);
+    const x=rnd(0,W-w);
+    const angle=p<.4?rnd(-.15,.15):rnd(-.04,.04);
+    cx.save(); cx.translate(x+w/2,y); cx.rotate(angle);
+    cx.fillStyle=presColor(.18+p*.40);
+    cx.fillRect(-w/2,-h2/2,w,h2);
+    cx.restore();
+  }}
+  // Bloques de esquina
+  const anchors=[[0,0,1,1],[W,0,-1,1],[0,H,1,-1],[W,H,-1,-1]];
+  for(const[bx,by,sx2,sy2]of anchors){{
+    if(SR()>.5+p*.3) continue;
+    const aw=40+p*80, ah=14+p*28;
+    cx.fillStyle=presColor(.50+p*.35);
+    cx.fillRect(sx2===1?bx:bx-aw,sy2===1?by:by-ah,aw,ah);
+  }}
+}}
+
+// ── PM2.5 — partículas violeta-parduzco, densidad proporcional ───────────
+function drawPM(){{
+  const pm=C.pm_norm;
+  if(pm<.04) return;
+  // Veladura
+  cx.fillStyle=pmColor(pm*.15); cx.fillRect(0,0,W,H);
+  // Partículas
+  const n=ri(20+pm*120,40+pm*200);
+  for(let i=0;i<n;i++){{
+    const x=rnd(0,W), y=rnd(0,H);
+    const r=rnd(1.5+pm*2, 4+pm*7);
+    cx.beginPath(); cx.arc(x,y,r,0,TAU);
+    cx.fillStyle=pmColor(.22+pm*.50);
+    cx.fill();
+  }}
+  if(pm>.25){{
+    const nm=ri(2,5);
+    for(let i=0;i<nm;i++){{
+      const mx=rnd(W*.05,W*.95), my=rnd(H*.05,H*.95);
+      const mg=cx.createRadialGradient(mx,my,0,mx,my,rnd(80,200));
+      mg.addColorStop(0,pmColor(pm*.28)); mg.addColorStop(1,'rgba(0,0,0,0)');
+      cx.fillStyle=mg; cx.fillRect(0,0,W,H);
     }}
   }}
+}}
 
-  function edge() {{
-    const m = sk.random(40,130), s = Math.floor(sk.random(4));
-    if (s===0) return [sk.random(W), m];
-    if (s===1) return [W-m, sk.random(H)];
-    if (s===2) return [sk.random(W), H-m];
-    return [m, sk.random(H)];
-  }}
-
-  function free() {{
-    return [sk.random(W*0.05,W*0.95), sk.random(H*0.05,H*0.95)];
-  }}
-
-  // ═══════════════════════════════════════════════════════════════
-  // PRIMITIVAS — 3 capas internas, alpha bajo para capas sutiles
-  // Alpha total de las formas: 8–28 (translucidas sobre negro)
-  // ═══════════════════════════════════════════════════════════════
-
-  // Triangulo — tension, filo, frio
-  function triangle(x, y, size, rot, h, s, b, alpha) {{
-    sk.push(); sk.translate(x,y); sk.rotate(rot);
-    for (let i=0; i<3; i++) {{
-      const f = 1 - i*0.2;
-      sk.fill(h+i*5, Math.min(100,s*(0.9-i*0.1)), Math.min(100,b*(1+i*0.15)), alpha*(0.55-i*0.13));
-      sk.noStroke();
-      sk.triangle(0,-size*f, -size*0.85*f,size*0.55*f, size*0.85*f,size*0.55*f);
-      if (i===0) {{
-        sk.noFill();
-        sk.stroke(h, s, Math.min(100,b*1.4), alpha*0.3);
-        sk.strokeWeight(0.6);
-        sk.triangle(0,-size, -size*0.85,size*0.55, size*0.85,size*0.55);
+// ── HUMEDAD — triángulos verde, saturación proporcional a HR ──────────────
+function drawHumedad(){{
+  const hum=C.humidity_norm;
+  const n=ri(3,5+hum*8);
+  const zonas=[[W*.02,W*.18],[W*.82,W*.98],[W*.22,W*.78]];
+  for(let i=0;i<n;i++){{
+    const y=rnd(H*.04,H*.96);
+    const zb=rp(zonas);
+    const x=rnd(zb[0],zb[1]);
+    const size=15+hum*55;
+    if(hum<.4){{
+      const ang=rnd(0,TAU);
+      cx.save(); cx.translate(x,y); cx.rotate(ang);
+      cx.beginPath();
+      cx.moveTo(0,-size); cx.lineTo(size*.8,size*.55); cx.lineTo(-size*.8,size*.55);
+      cx.closePath();
+      cx.fillStyle=humColor(.22+hum*.40); cx.fill();
+      cx.strokeStyle=humColor(.60+hum*.30); cx.lineWidth=1.0; cx.stroke();
+      cx.restore();
+    }} else {{
+      const rx=size*(.7+SR()*.5), ry=size*(.4+SR()*.4), angle=rnd(0,TAU);
+      cx.beginPath(); cx.ellipse(x,y,rx,ry,angle,0,TAU);
+      cx.fillStyle=humColor(.10+hum*.28); cx.fill();
+      cx.strokeStyle=humColor(.35+hum*.40); cx.lineWidth=.8; cx.stroke();
+      if(hum>.6){{
+        const vg=cx.createRadialGradient(x,y,0,x,y,rx);
+        vg.addColorStop(0,humColor(hum*.32)); vg.addColorStop(1,'rgba(0,0,0,0)');
+        cx.fillStyle=vg; cx.fill();
       }}
     }}
-    sk.pop();
+  }}
+}}
+
+// ── NUBES — rombos gris azulado, opacidad proporcional a cobertura ────────
+function drawNubes(){{
+  const cld=C.cloud_norm;
+  if(cld<.04) return;
+  const n=ri(Math.floor(3+cld*5), Math.floor(6+cld*14));
+  for(let i=0;i<n;i++){{
+    const x=rnd(W*.04,W*.96), y=rnd(H*.03,H*.97);
+    const w=28+cld*80+rnd(0,30);
+    const h2=w*(0.5+rnd(0,0.35));
+    const angle=rnd(-0.18,0.18);
+    cx.save(); cx.translate(x,y); cx.rotate(angle);
+    cx.beginPath();
+    cx.moveTo(0,-h2); cx.lineTo(w,0); cx.lineTo(0,h2); cx.lineTo(-w,0);
+    cx.closePath();
+    cx.fillStyle=cloudColor(.22+cld*.42); cx.fill();
+    cx.strokeStyle=cloudColor(.65+cld*.30);
+    cx.lineWidth=1.5+cld*1.8; cx.stroke();
+    cx.restore();
+  }}
+}}
+
+// ── ML RIESGO MAÑANA — presencia real en el cuadro ───────────────────────
+// Sin riesgo (<25%): nada visible — el cuadro está "tranquilo"
+// Riesgo medio (25-60%): veladura sutil del color del evento + marcas en borde
+// Riesgo alto (>60%): veladura fuerte + formas de alerta por todo el canvas
+// Riesgo crítico (>85%): el cuadro entero tiembla — marcas en todas las capas
+function drawML(){{
+  if(!C.ml_ready||C.risk_score<.1) return;
+  const risk=C.risk_score;
+
+  // Color del evento — cada tipo tiene su propio tono
+  let rH,rS,rL;
+  if     (C.event_type==='heat') {{rH=8;  rS=82;rL=48;}}  // rojo-naranja
+  else if(C.event_type==='cold') {{rH=215;rS=75;rL=42;}}  // azul frío
+  else if(C.event_type==='rain') {{rH=200;rS=70;rL=40;}}  // azul-gris
+  else if(C.event_type==='wind') {{rH=150;rS=60;rL=38;}}  // verde tenso
+  else                           {{rH=45; rS=75;rL=45;}}  // ámbar genérico
+
+  const rc=(a)=>`hsla(${{rH}},${{rS}}%,${{rL}}%,${{a}})`;
+
+  // 1. VELADURA — cubre todo el canvas con el color del evento
+  // Proporcional al riesgo: apenas perceptible si riesgo bajo
+  if(risk>.15){{
+    cx.fillStyle=rc(risk*0.18);
+    cx.fillRect(0,0,W,H);
   }}
 
-  // Rectangulo — estabilidad, orden, presion alta
-  function rectangle(x, y, w2, h2, rot, h, s, b, alpha) {{
-    sk.push(); sk.translate(x,y); sk.rotate(rot);
-    for (let i=0; i<3; i++) {{
-      const f = 1 - i*0.18;
-      sk.fill(h+i*3, Math.min(100,s*(0.9-i*0.12)), Math.min(100,b*(1+i*0.14)), alpha*(0.55-i*0.13));
-      sk.noStroke();
-      sk.rect(-w2*0.5*f, -h2*0.5*f, w2*f, h2*f);
-      if (i===0) {{
-        sk.noFill();
-        sk.stroke(h, s, Math.min(100,b*1.45), alpha*0.25);
-        sk.strokeWeight(0.5);
-        sk.rect(-w2*0.5, -h2*0.5, w2, h2);
-      }}
+  // 2. MARCAS DE BORDE — triángulos que invaden desde los 4 lados
+  // Cuanto más riesgo, más grandes y más adentro entran
+  const nMarks=Math.floor(risk*22);
+  for(let i=0;i<nMarks;i++){{
+    const edge=i%4;
+    let x,y,rotBase;
+    const penetra=risk*80; // cuánto entran hacia el interior
+    if(edge===0){{x=rnd(W*.05,W*.95);y=rnd(4,penetra);        rotBase=0;}}
+    else if(edge===1){{x=rnd(W-penetra,W-4);y=rnd(H*.05,H*.95);rotBase=Math.PI*.5;}}
+    else if(edge===2){{x=rnd(W*.05,W*.95);y=rnd(H-penetra,H-4);rotBase=Math.PI;}}
+    else              {{x=rnd(4,penetra);  y=rnd(H*.05,H*.95); rotBase=Math.PI*1.5;}}
+    const sz=6+risk*20+rnd(0,8);
+    cx.save(); cx.translate(x,y); cx.rotate(rotBase+rnd(-.3,.3));
+    cx.beginPath();
+    cx.moveTo(0,-sz); cx.lineTo(sz*.8,sz*.6); cx.lineTo(-sz*.8,sz*.6);
+    cx.closePath();
+    cx.fillStyle=rc(0.35+risk*.45);
+    cx.fill();
+    cx.restore();
+  }}
+
+  // 3. FORMAS DISPERSAS EN EL INTERIOR si riesgo alto
+  // Se cuelan entre las demás figuras — el cuadro "se contamina" de alerta
+  if(risk>.5){{
+    const nInner=Math.floor((risk-.5)*2*16);
+    for(let i=0;i<nInner;i++){{
+      const x=rnd(W*.08,W*.92), y=rnd(H*.08,H*.92);
+      const sz=4+risk*14;
+      cx.save(); cx.translate(x,y); cx.rotate(rnd(0,TAU));
+      cx.beginPath();
+      cx.moveTo(0,-sz); cx.lineTo(sz*.8,sz*.6); cx.lineTo(-sz*.8,sz*.6);
+      cx.closePath();
+      cx.fillStyle=rc(0.18+risk*.22);
+      cx.fill();
+      cx.restore();
     }}
-    sk.pop();
   }}
 
-  // Rombo — dinamismo, transicion
-  function rhombus(x, y, size, rot, h, s, b, alpha) {{
-    sk.push(); sk.translate(x,y); sk.rotate(rot);
-    for (let i=0; i<3; i++) {{
-      const f = 1 - i*0.2;
-      sk.fill(h+i*6, Math.min(100,s*(0.88-i*0.1)), Math.min(100,b*(1+i*0.14)), alpha*(0.55-i*0.13));
-      sk.noStroke();
-      sk.quad(0,-size*f, size*0.65*f,0, 0,size*f, -size*0.65*f,0);
-      if (i===0) {{
-        sk.noFill();
-        sk.stroke(h, s, Math.min(100,b*1.4), alpha*0.28);
-        sk.strokeWeight(0.55);
-        sk.quad(0,-size, size*0.65,0, 0,size, -size*0.65,0);
-      }}
-    }}
-    sk.pop();
+  // 4. MARCO DE TENSIÓN si riesgo crítico (>80%)
+  // Un borde interior del canvas del color del evento
+  if(risk>.8){{
+    const margin=12;
+    cx.strokeStyle=rc(0.55);
+    cx.lineWidth=3+risk*4;
+    cx.strokeRect(margin,margin,W-margin*2,H-margin*2);
   }}
+}}
 
-  // Circulo/Elipse — calor, expansion, irradiacion
-  function circle(x, y, rx, ry, h, s, b, alpha) {{
-    for (let i=0; i<4; i++) {{
-      const f = 1 + i*0.30;
-      sk.noStroke();
-      sk.fill(h+i*3, Math.min(100,s*(0.88-i*0.12)), Math.min(100,b*(1+i*0.08)), alpha*(0.52-i*0.11));
-      sk.ellipse(x+sk.random(-3,3), y+sk.random(-2,2), rx*2*f, ry*2*f);
-    }}
-    // Nucleo brillante
-    sk.fill(h, Math.min(100,s*1.1), Math.min(100,b*1.3), alpha*0.65);
-    sk.ellipse(x, y, rx*0.38, ry*0.38);
-  }}
+// ── RENDER ────────────────────────────────────────────────────────────────
+drawFondo();
+drawPresion();
+drawNubes();
+drawViento();
+drawHumedad();
+drawPM();
+drawTemperatura();
+drawML();
 
-  // ═══════════════════════════════════════════════════════════════
-  // PASES DE PINTURA
-  // Orden: temperatura → presion → viento → PM2.5 → humedad → nubes → gesto
-  // ═══════════════════════════════════════════════════════════════
-  function buildPasses(pal) {{
-    const t     = C.temp_norm;
-    const we    = C.wind_energy;
-    const pm    = C.pm_norm;
-    const hum   = C.humidity_norm;
-    const pnorm = C.pressure_norm;
-    const cld   = C.cloud_norm;
+// ── UI ────────────────────────────────────────────────────────────────────
+document.getElementById('city').textContent=
+  `ATMOSPHERICA · ${{C.city.toUpperCase()}} · ${{C.date}} · ${{C.hour}}h`;
+document.getElementById('dateline').textContent=
+  `${{C.temp_c.toFixed(1)}}°C · ${{C.pressure}} hPa · ${{C.wind_speed.toFixed(1)}} m/s ${{C.wind_dir}} · PM2.5 ${{C.pm25.toFixed(1)}} µg/m³ · HR ${{C.humidity}}%`;
+document.getElementById('edition').textContent=
+  `ED. ${{C.date}} — ${{C.day_type.toUpperCase()}}`;
 
-    passes = [
+// ── Leyenda detallada ─────────────────────────────────────────────────────
 
-      // ── PASE 1: TEMPERATURA ─────────────────────────────────────
-      // Forma segun temperatura:
-      //   frio  (<0.30) → triangulos agudos — tension, filo
-      //   medio (<0.55) → rectangulos y rombos — equilibrio
-      //   calor (>=0.55)→ circulos — expansion, calor irradia
-      // Alpha bajo (8–22) para acumulacion sutil sobre negro
-      {{ name:'temperatura', total:Math.floor(180+t*220), drawn:0, fn:(prog) => {{
-        const [h,s,b] = prog<0.38 ? pal.dark : prog<0.72 ? pal.primary : pal.accent;
-        const [x,y]   = zone();
-        const rot     = sk.noise(x*0.004, y*0.004) * sk.TWO_PI;
-        const size    = 14 + t*95 + sk.random(32);
-        // Alpha: muy bajo para que se acumulen como veladuras
-        const alpha   = 8 + t*14 + sk.random(8);
-        const sat     = Math.min(100, s*(0.75+t*0.4));
-        const bri     = Math.min(100, b*(0.9+prog*0.15));
-        if      (t < 0.30) triangle(x, y, size, rot, h, sat, bri, alpha);
-        else if (t < 0.55) sk.random()<0.5
-          ? rectangle(x, y, size, size*sk.random(0.4,1.8), rot, h, sat, bri, alpha)
-          : rhombus(x, y, size, rot, h, sat, bri, alpha);
-        else               circle(x, y, size*sk.random(0.6,1.4), size*sk.random(0.5,1.2), h, sat, bri, alpha);
-      }}}},
+const vientoDesc=`azul — velocidad ${{C.wind_speed.toFixed(1)}} m/s · ${{C.wind_energy<.15?'calma: azul pálido y líneas cortas':C.wind_energy<.4?'moderado: azul medio':C.wind_energy<.7?'fuerte: azul intenso y líneas largas':'temporal: azul oscuro que cruza el canvas'}}`;
+const humDesc=`verde — HR ${{C.humidity}}% · ${{C.humidity_norm<.3?'seco: verde apagado y triángulos pequeños':C.humidity_norm<.6?'moderado: verde medio':C.humidity_norm<.8?'húmedo: verde saturado':'muy húmedo: verde profundo y elipses blandas'}}`;
+const pmCalidad=`violeta — ${{C.pm_norm<.1?'excelente: casi invisible':C.pm_norm<.25?'buena: puntos leves':C.pm_norm<.45?'moderada: puntos visibles':C.pm_norm<.65?'mala: veladura notable':'muy mala: cuadro enturbiado'}}`;
+const presionDesc=`ocre — ${{C.pressure}} hPa · ${{C.pressure_norm<.35?'baja: ocre pálido e inclinado':C.pressure_norm<.6?'normal: ocre moderado':'alta: ocre sólido y bandas anchas'}}`;
+const nubesDesc=`gris azulado — ${{C.clouds}}% · ${{C.cloud_norm<.15?'despejado: rombos pequeños y translúcidos':C.cloud_norm<.5?'parcialmente nublado':C.cloud_norm<.75?'muy nublado: rombos densos':'cubierto: gris oscuro y opaco'}}`;
 
-      // ── PASE 2: PRESION ──────────────────────────────────────────
-      // Alta presion: lineas largas y paralelas (isobaras)
-      // Baja presion: arcos cortos en los bordes
-      {{ name:'presion', total:Math.floor(80+pnorm*120), drawn:0, fn:(prog) => {{
-        const [h,s,b] = pal.neutral;
-        const alpha   = 8 + pnorm*22;
-        const sat     = Math.min(100, s*(0.5+pnorm*0.7));
-        const bri     = Math.min(100, b*(0.6+pnorm*0.6));
-        if (pnorm > 0.55) {{
-          const [x,y] = zone();
-          const len   = 80 + pnorm*280;
-          const angle = sk.noise(x*0.003, y*0.003, 5)*sk.PI*0.6 - sk.PI*0.3;
-          sk.push(); sk.translate(x,y); sk.rotate(angle);
-          for (let i=0; i<3; i++) {{
-            const off = (i-1)*(6+pnorm*8);
-            sk.noFill();
-            sk.stroke(h, sat*(0.9-i*0.15), Math.min(100,bri*(1+i*0.12)), alpha*(0.7-i*0.16));
-            sk.strokeWeight(1.1+pnorm*1.4-i*0.28);
-            sk.line(-len*0.5, off, len*0.5, off);
-          }}
-          sk.pop();
-        }} else {{
-          const [x,y] = edge();
-          const r     = sk.random(40,140);
-          const start = sk.random(sk.TWO_PI);
-          sk.noFill(); sk.stroke(h, sat, bri, alpha); sk.strokeWeight(sk.random(0.7,2.3));
-          sk.arc(x, y, r*2.2, r*1.4, start, start+sk.random(sk.PI*0.4,sk.PI*1.4));
-        }}
-      }}}},
+function row(symbol, color, title, desc){{
+  return `<div class="leg">
+    <div style="font-size:13px;line-height:1;margin-top:1px;color:${{color}};flex-shrink:0;width:18px;text-align:center;">${{symbol}}</div>
+    <div class="ltext"><strong>${{title}}</strong><em>${{desc}}</em></div>
+  </div>`;
+}}
 
-      // ── PASE 3: VIENTO ───────────────────────────────────────────
-      // Trazos en la direccion exacta del viento con fade progresivo
-      {{ name:'viento', total:Math.floor(60+we*180), drawn:0, fn:(prog) => {{
-        const [h,s,b] = pal.complement;
-        const windAng = Math.atan2(C.wind_dy, C.wind_dx);
-        const [x,y]   = free();
-        const spread  = sk.PI*(we<0.3 ? 0.85 : 0.18);
-        const angle   = windAng + sk.random(-spread, spread);
-        const len     = we<0.15 ? sk.random(10,50) : sk.random(60,350*we);
-        const alpha   = 6 + we*52;
-        const sw      = we<0.1 ? sk.random(0.3,0.9) : sk.random(0.7,2.2+we*2.5);
-        const sat     = Math.min(100, s*(0.4+we*0.9));
-        const bri     = Math.min(100, b*(0.8+we*0.3));
-        const steps   = Math.max(3, Math.floor(len/8));
-        const spd     = len/steps;
-        let cx=x, cy=y;
-        for (let i=0; i<steps; i++) {{
-          const nx=cx+Math.cos(angle)*spd, ny=cy+Math.sin(angle)*spd;
-          sk.stroke(h, sat, bri, alpha*(1-i/steps*0.82));
-          sk.strokeWeight(sw*(0.4+(1-i/steps)*0.65));
-          sk.noFill(); sk.line(cx,cy,nx,ny);
-          cx=nx; cy=ny;
-        }}
-      }}}},
+// Muestra de color real de cada variable en este momento
+const windC  =windColor(1);
+const presC  =presColor(1);
+const humC   =humColor(1);
+const cloudC =cloudColor(1);
+const pmC    =pmColor(1);
 
-      // ── PASE 4: PM2.5 ────────────────────────────────────────────
-      // Grano de particulas — erosiona la oscuridad con polvo
-      {{ name:'pm2.5', total:Math.floor(40+pm*300), drawn:0, fn:(prog) => {{
-        const [h,s,b] = pal.neutral;
-        if (pm<0.15 && sk.random()>pm*4) return;
-        const [x,y] = free();
-        const grain  = Math.floor(2+pm*20);
-        const alpha  = 4 + pm*20;
-        for (let i=0; i<grain; i++) {{
-          const gx=x+sk.random(-60*pm,60*pm), gy=y+sk.random(-60*pm,60*pm);
-          const gr=sk.random(0.5, 2+pm*4.5);
-          sk.noStroke();
-          sk.fill(h+sk.random(-25,25), Math.min(100,s*(0.4+pm*0.6)), b*(0.5+pm*0.5), alpha*sk.random(0.5,1.5));
-          sk.random()<0.4 ? sk.rect(gx-gr,gy-gr,gr*2,gr*2) : sk.ellipse(gx,gy,gr*2,gr*1.5);
-        }}
-      }}}},
+const tempScale=`
+  <div style="display:flex;gap:4px;align-items:center;margin:6px 0 2px;flex-wrap:wrap;">
+    ${{[['≤5°','hsl(225,70%,38%)'],['13°','hsl(145,60%,42%)'],['19°','hsl(55,75%,52%)'],['25°','hsl(28,80%,52%)'],['31°+','hsl(5,78%,50%)']].map(([l,c])=>`
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:${{c}};"></div>
+        <div style="font-size:7px;color:#9a9080;">${{l}}</div>
+      </div>`).join('')}}
+    <div style="font-size:7.5px;color:#9a9080;margin-left:6px;">frío=azul · templado=verde/amarillo · calor=naranja/rojo</div>
+  </div>`;
 
-      // ── PASE 5: HUMEDAD ──────────────────────────────────────────
-      // Velos translucidos — >65%: lluvia vertical / <65%: niebla
-      {{ name:'humedad', total:Math.floor(40+hum*160), drawn:0, fn:(prog) => {{
-        const [h,s,b] = pal.complement;
-        if (hum<0.38 && sk.random()>hum*2.5) return;
-        const [x,y] = sk.random()<0.5 ? zone() : edge();
-        const alpha  = 3 + hum*14;
-        const sat    = Math.min(100, s*(0.2+hum*0.5));
-        const bri    = Math.min(100, b*(0.7+hum*0.35));
-        if (hum>0.65) {{
-          const len=15+hum*50;
-          sk.stroke(h,sat,bri,alpha); sk.strokeWeight(0.4+hum*0.7); sk.noFill();
-          sk.line(x, y-len*0.5, x+sk.random(-2,2), y+len*0.5);
-        }} else {{
-          const nv=Math.floor(2+hum*4);
-          for (let i=0;i<nv;i++) {{
-            const r=sk.random(30,150+hum*150);
-            sk.noStroke();
-            sk.fill(h+sk.random(-20,20), sat*0.6, Math.min(100,bri+6), alpha*(0.35-i*0.07));
-            sk.ellipse(x+sk.random(-15,15), y+sk.random(-10,10), r*(1+i*0.4), r*0.7*(1+i*0.4));
-          }}
-        }}
-      }}}},
+document.getElementById('legend').innerHTML=`
+<h2>clave de lectura · figura + color + intensidad = dato climático</h2>
 
-      // ── PASE 6: NUBES ────────────────────────────────────────────
-      // Masas redondeadas translucidas — despejado=nada, cubierto=dominante
-      {{ name:'nubes', total:Math.floor(20+cld*120), drawn:0, fn:(prog) => {{
-        if (cld<0.15 && sk.random()>cld*4) return;
-        const [h,s,b] = pal.neutral;
-        const [x,y]   = sk.random()<0.6 ? zone() : edge();
-        const w2=60+cld*200+sk.random(60), h2=20+cld*80+sk.random(30);
-        const alpha=4+cld*18;
-        sk.noStroke();
-        for (let i=0;i<4;i++) {{
-          const f=1+i*0.3;
-          sk.fill(h+sk.random(-10,10), s*(0.2+cld*0.3), Math.min(100,b*(0.8+cld*0.22)), alpha*(0.3-i*0.06));
-          sk.ellipse(x+sk.random(-12,12), y+sk.random(-8,8), w2*f, h2*f);
-        }}
-      }}}},
+<div class="leg-section">
+  <div class="leg-section-title">● círculos — temperatura · escala de color fija universal</div>
+  <div style="font-size:8px;color:#7a7060;line-height:1.8;margin-bottom:6px;">
+    El color siempre indica la temperatura, igual en cualquier cuadro de cualquier día.
+    Hoy: <span class="val">${{C.temp_c.toFixed(1)}}°C</span> · tamaño y anillos también crecen con el calor.
+  </div>
+  ${{tempScale}}
+</div>
 
-      // ── PASE 7: GESTO FINAL ──────────────────────────────────────
-      // Firma artistica del dia — formas pequenas en los bordes
-      {{ name:'gesto', total:80, drawn:0, fn:(prog) => {{
-        const [h,s,b] = sk.random()<0.45 ? pal.accent : pal.primary;
-        const [x,y]   = edge();
-        const size    = sk.random(5,24), rot=sk.random(sk.TWO_PI);
-        const alpha   = sk.random(10,30);
-        const sat=Math.min(100,s*1.1), bri=Math.min(100,b*1.05);
-        const st=Math.floor(sk.random(5));
-        if      (st===0) triangle(x,y,size,rot,h,sat,bri,alpha);
-        else if (st===1) rectangle(x,y,size,size*sk.random(0.5,2),rot,h,sat,bri,alpha);
-        else if (st===2) rhombus(x,y,size,rot,h,sat,bri,alpha);
-        else if (st===3) circle(x,y,size,size*sk.random(0.6,1.2),h,sat,bri,alpha);
-        else {{
-          sk.stroke(h,sat,bri,alpha); sk.strokeWeight(sk.random(0.4,1.8)); sk.noFill();
-          const len=sk.random(12,50);
-          sk.line(x-Math.cos(rot)*len,y-Math.sin(rot)*len,x+Math.cos(rot)*len,y+Math.sin(rot)*len);
-        }}
-      }}}},
-    ];
-  }}
+<div class="leg-section">
+  <div class="leg-section-title">— curvas — viento · azul</div>
+  <div class="leg-rows">
+    ${{row('—', windC, `${{C.wind_speed.toFixed(1)}} m/s ${{C.wind_dir}}`, vientoDesc)}}
+  </div>
+</div>
 
-  // ═══════════════════════════════════════════════════════════════
-  // UI
-  // ═══════════════════════════════════════════════════════════════
-  function renderMeta() {{
-    document.getElementById('title').innerHTML =
-      'ATMOSPHERICA &nbsp;·&nbsp; ' + C.city.toUpperCase() + ' &nbsp;·&nbsp; ' + C.date;
-    document.getElementById('meta').innerHTML =
-      C.temp_c.toFixed(1) + '°C &nbsp;·&nbsp; ' +
-      C.pressure + ' hPa &nbsp;·&nbsp; ' +
-      C.wind_speed.toFixed(1) + ' m/s ' + C.wind_dir_label +
-      ' &nbsp;·&nbsp; PM2.5 ' + C.pm25.toFixed(1) +
-      ' &nbsp;·&nbsp; HR ' + C.humidity + '% &nbsp;·&nbsp; ' +
-      C.hour + 'h';
-  }}
+<div class="leg-section">
+  <div class="leg-section-title">▭ rectángulos — presión · ocre</div>
+  <div class="leg-rows">
+    ${{row('▭', presC, `${{C.pressure}} hPa`, presionDesc)}}
+  </div>
+</div>
 
-  function renderLegend(pal) {{
-    const items = [
-      {{ pal:pal.primary,    label:'temperatura ' + C.temp_c.toFixed(0) + '°C + hora ' + C.hour + 'h',
-         text:'color y tipo de forma — frio=triangulos, templado=rectangulos, calor=circulos. Hora define la luminosidad.' }},
-      {{ pal:pal.neutral,    label:'presion ' + C.pressure + ' hPa',
-         text:'alta presion: lineas largas y paralelas. baja presion: arcos tensos en los bordes.' }},
-      {{ pal:pal.complement, label:'viento ' + C.wind_speed.toFixed(1) + ' m/s ' + C.wind_dir_label,
-         text:'trazos en la direccion real del viento — longitud proporcional a la velocidad.' }},
-      {{ pal:pal.neutral,    label:'PM2.5 ' + C.pm25.toFixed(1),
-         text:'grano disperso — puntos y cuadraditos. mas contaminacion, mas erosion visible.' }},
-      {{ pal:pal.complement, label:'humedad ' + C.humidity + '%',
-         text:'velos translucidos. alta humedad: lluvia vertical. baja: dia seco y nitido.' }},
-      {{ pal:pal.neutral,    label:'nubes ' + Math.round(C.cloud_norm*100) + '%',
-         text:'masas redondeadas que velan la luz segun la cobertura nubosa.' }},
-    ];
-    document.getElementById('legend').innerHTML = items.map(it => {{
-      const hex = hsbHex(it.pal);
-      return `<div class="leg">
-        <div class="dot" style="background:${{hex}}"></div>
-        <div><strong>${{it.label}}</strong><small>${{it.text}}</small></div>
-      </div>`;
-    }}).join('');
-  }}
+<div class="leg-section">
+  <div class="leg-section-title">△ triángulos — humedad · verde</div>
+  <div class="leg-rows">
+    ${{row('△', humC, `HR ${{C.humidity}}%`, humDesc)}}
+  </div>
+</div>
 
-  function hsbHex([h,s,b]) {{
-    const [hh,ss,bb]=[h/360,s/100,b/100];
-    const i=Math.floor(hh*6),f=hh*6-i;
-    const q=bb*(1-ss*f),t=bb*(1-ss*(1-f)),p=bb*(1-ss);
-    let r,g,bv;
-    switch(i%6){{case 0:r=bb;g=t;bv=p;break;case 1:r=q;g=bb;bv=p;break;
-      case 2:r=p;g=bb;bv=t;break;case 3:r=p;g=q;bv=bb;break;
-      case 4:r=t;g=p;bv=bb;break;default:r=bb;g=p;bv=q;}}
-    return '#'+[r,g,bv].map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('');
-  }}
+<div class="leg-section">
+  <div class="leg-section-title">◆ rombos — nubosidad · gris azulado</div>
+  <div class="leg-rows">
+    ${{row('◆', cloudC, `${{C.clouds}}% cobertura`, nubesDesc)}}
+  </div>
+</div>
 
-  function updateProgress() {{
-    if (passIdx < passes.length)
-      document.getElementById('progress').textContent =
-        'pintando ' + passes[passIdx].name + '... (' + (passIdx+1) + '/' + passes.length + ')';
-  }}
+<div class="leg-section">
+  <div class="leg-section-title">● puntos — calidad del aire PM2.5 · violeta</div>
+  <div class="leg-rows">
+    ${{row('●', pmC, `${{C.pm25.toFixed(1)}} µg/m³`, pmCalidad)}}
+  </div>
+</div>
 
-}});
+${{C.ml_ready?`
+<div class="leg-section" style="border-top:1px solid #d0c8b8;padding-top:18px;margin-top:4px;">
+  <div class="leg-section-title" style="color:${{C.risk_score<.25?'#9a9080':C.risk_score<.6?'#b06020':'#c03010'}};">
+    ◈ predicción ML — riesgo meteorológico mañana
+  </div>
+  ${{(()=>{{
+    const risk=C.risk_score;
+    const pct=(risk*100).toFixed(0);
+    const evtEs=C.event_type==='heat'?'calor extremo':C.event_type==='cold'?'frío intenso':
+                C.event_type==='rain'?'lluvia intensa':C.event_type==='wind'?'viento fuerte':'evento genérico';
+    const colorBarra=risk<.25?'#6aaa6a':risk<.6?'#e0900a':'#c83010';
+    const nivelFull=risk<.1?'SIN RIESGO — cuadro tranquilo':
+                   risk<.25?'BAJO — veladura casi imperceptible':
+                   risk<.6? 'MEDIO — veladura + marcas en los 4 bordes':
+                   risk<.85?'ALTO — formas de alerta invaden el interior':
+                            'CRÍTICO — marco de tensión + cuadro completamente teñido';
+    return `
+    <div style="font-size:8px;color:#7a7060;line-height:1.9;margin-bottom:8px;">
+      Evento probable: <span class="val" style="color:${{colorBarra}};">${{evtEs.toUpperCase()}}</span>
+      &nbsp;·&nbsp; <span class="val" style="color:${{colorBarra}};">${{nivelFull}}</span>
+    </div>
+    <div style="margin:4px 0 8px;">
+      <div style="display:flex;justify-content:space-between;font-size:7px;color:#9a9080;margin-bottom:3px;">
+        <span>0% sin riesgo</span><span>100% crítico</span>
+      </div>
+      <div style="height:8px;background:#e8e0d0;border-radius:4px;overflow:hidden;">
+        <div style="height:100%;width:${{pct}}%;background:${{colorBarra}};border-radius:4px;"></div>
+      </div>
+      <div style="font-size:8.5px;color:${{colorBarra}};margin-top:3px;letter-spacing:.1em;">${{pct}}% DE PROBABILIDAD</div>
+    </div>`;
+  }})()}}
+</div>`:
+`<div class="leg-section" style="border-top:1px solid #d0c8b8;padding-top:14px;margin-top:4px;">
+  <div class="leg-section-title" style="color:#b0a890;">◈ predicción ML — no disponible</div>
+</div>`}}`;// ── Guardar PNG ───────────────────────────────────────────────────────────
+function saveImg(){{
+  const st=document.getElementById('status');
+  st.textContent='preparando...';
+  setTimeout(()=>{{
+    try{{
+      const t2=document.createElement('canvas');
+      t2.width=cv.width; t2.height=cv.height;
+      const tc=t2.getContext('2d');
+      tc.fillStyle=P.paper; tc.fillRect(0,0,t2.width,t2.height);
+      tc.drawImage(cv,0,0);
+      t2.toBlob(blob=>{{
+        if(!blob){{st.textContent='error';return;}}
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        a.download=`atmospherica_${{C.city}}_${{C.date}}_${{C.hour}}h.png`;
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+        setTimeout(()=>URL.revokeObjectURL(url),2000);
+        st.textContent='guardado ✓';
+      }},'image/png');
+    }}catch(e){{st.textContent='error: '+e.message;}}
+  }},80);
+}}
 </script>
 </body>
 </html>"""
 
 
-# ─────────────────────────────────────────────────────────────────
-# UTILIDADES
-# ─────────────────────────────────────────────────────────────────
+def _wind_label(deg):
+    dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO']
+    return dirs[int((deg+11.25)/22.5)%16]
 
-def _wind_label(deg: float) -> str:
-    dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE',
-            'S','SSO','SO','OSO','O','ONO','NO','NNO']
-    return dirs[int((deg + 11.25) / 22.5) % 16]
+def _day_type(cld,t,we,pm,hum):
+    if we>0.55:               return "ventoso"
+    elif pm>0.45:             return "contaminado"
+    elif t<0.28:              return "frio"
+    elif cld>0.55 and hum>.55:return "lluvioso"
+    elif t>0.72:              return "caluroso"
+    else:                     return "estable"
 
-
-def _day_type(we, pm, t, cld, hum):
-    if we  > 0.55:              return "windy"
-    if pm  > 0.45:              return "polluted"
-    if t   < 0.28:              return "cold"
-    if cld > 0.55 and hum>0.55: return "rainy"
-    return "stable"
-
-
-# ─────────────────────────────────────────────────────────────────
-# FUNCION PRINCIPAL
-# ─────────────────────────────────────────────────────────────────
 
 def generate_html(visual_params: dict, output_dir: str = "output") -> str:
-    """
-    Genera un fichero HTML con la visualizacion ATMOSPHERICA.
-
-    Parametros esperados en visual_params:
-      raw              : dict con los datos crudos de la API meteorologica
-        raw.city         : str   nombre de la ciudad
-        raw.temperature  : float temperatura en Celsius
-        raw.pressure     : float presion en hPa
-        raw.wind_speed   : float velocidad del viento m/s
-        raw.wind_deg     : float direccion del viento en grados
-        raw.pm2_5        : float particulas PM2.5
-        raw.humidity     : int   humedad relativa %
-        raw.clouds       : int   cobertura nubosa % (opcional, default 15)
-      temperature_norm : float temperatura normalizada 0-1
-      wind_energy      : float energia del viento normalizada 0-1
-      wind_dx          : float componente X del viento (cos)
-      wind_dy          : float componente Y del viento (sin)
-      fragmentation    : float PM2.5 normalizado 0-1
-      veil_opacity     : float humedad * 80 (se divide entre 80 internamente)
-      density          : float presion normalizada 0-1
-
-    Retorna la ruta del fichero HTML generado.
-    """
     os.makedirs(output_dir, exist_ok=True)
-
-    raw   = visual_params["raw"]
+    data  = visual_params["raw"]
     now   = datetime.now()
     date  = now.strftime("%Y-%m-%d")
     hour  = now.hour
-    city  = raw["city"]
-
+    city  = data["city"]
     t     = visual_params["temperature_norm"]
     we    = visual_params["wind_energy"]
     pm    = visual_params["fragmentation"]
     hum   = visual_params["veil_opacity"] / 80.0
     pnorm = visual_params["density"]
-    cld   = raw.get("clouds", 15) / 100.0
-
-    wind_dx = visual_params.get("wind_dx", math.cos(math.radians(raw.get("wind_deg", 0))))
-    wind_dy = visual_params.get("wind_dy", math.sin(math.radians(raw.get("wind_deg", 0))))
-
-    day_type = _day_type(we, pm, t, cld, hum)
+    cld   = data.get("clouds", 15) / 100.0
+    risk_score = visual_params.get("risk_score", 0.0)
+    event_type = visual_params.get("event_type", "none")
+    ml_ready   = visual_params.get("ml_ready",   False)
+    day_type   = _day_type(cld,t,we,pm,hum)
 
     climate_data = {
-        "city":           city,
-        "date":           date,
-        "hour":           hour,
-        "temp_c":         raw["temperature"],
-        "pressure":       raw["pressure"],
-        "wind_speed":     raw["wind_speed"],
-        "wind_dir_label": _wind_label(raw.get("wind_deg", 0)),
-        "pm25":           raw["pm2_5"],
-        "humidity":       raw["humidity"],
-        "clouds":         raw.get("clouds", 15),
-        "temp_norm":      round(t,       3),
-        "pressure_norm":  round(pnorm,   3),
-        "wind_energy":    round(we,      3),
-        "wind_dx":        round(wind_dx, 3),
-        "wind_dy":        round(wind_dy, 3),
-        "pm_norm":        round(pm,      3),
-        "humidity_norm":  round(hum,     3),
-        "cloud_norm":     round(cld,     3),
-        "day_type":       day_type,
+        "city":city,"date":date,"hour":hour,
+        "temp_c":data["temperature"],"pressure":data["pressure"],
+        "wind_speed":data["wind_speed"],"wind_dir":_wind_label(data["wind_deg"]),
+        "wind_dx":round(visual_params["wind_dx"],3),
+        "wind_dy":round(visual_params["wind_dy"],3),
+        "pm25":data["pm2_5"],"humidity":data["humidity"],
+        "clouds":data.get("clouds",15),
+        "temp_norm":round(t,3),"pressure_norm":round(pnorm,3),
+        "wind_energy":round(we,3),"pm_norm":round(pm,3),
+        "humidity_norm":round(hum,3),"cloud_norm":round(cld,3),
+        "day_type":day_type,"risk_score":round(risk_score,3),
+        "event_type":event_type,"ml_ready":ml_ready,
     }
 
-    print(f"\n  Tipo de dia  : {day_type}")
-    print(f"  Temperatura  : {raw['temperature']:.1f}C  (norm {t:.2f})")
-    print(f"  Hora         : {hour}h")
-    print(f"  Presion      : {raw['pressure']} hPa  (norm {pnorm:.2f})")
-    print(f"  Viento       : {raw['wind_speed']:.1f} m/s {_wind_label(raw.get('wind_deg',0))}")
-    print(f"  PM2.5        : {raw['pm2_5']:.1f}")
-    print(f"  Humedad      : {raw['humidity']}%")
-    print(f"  Nubes        : {raw.get('clouds',15)}%")
+    print(f"\n  Ciudad       : {city}")
+    print(f"  Fecha        : {date}  Hora: {hour}h  Tipo: {day_type}")
+    print(f"  Temperatura  : {data['temperature']:.1f}°C  (norm {t:.2f})")
+    print(f"  Presión      : {data['pressure']} hPa  (norm {pnorm:.2f})")
+    print(f"  Viento       : {data['wind_speed']:.1f} m/s {_wind_label(data['wind_deg'])}  (energía {we:.2f})")
+    print(f"  PM2.5        : {data['pm2_5']:.1f} µg/m³  (norm {pm:.2f})")
+    print(f"  Humedad      : {data['humidity']}%  (norm {hum:.2f})")
+    print(f"  Nubes        : {data.get('clouds',15)}%")
+    print(f"  ML riesgo    : {risk_score:.1%}  evento: {event_type}")
 
     html = HTML_TEMPLATE.format(
-        climate_json=json.dumps(climate_data, indent=2),
+        city=city,
+        climate_json=json.dumps(climate_data, indent=2, ensure_ascii=False),
     )
-
     fname = f"atmospherica_{city.replace(' ','_')}_{date}_{hour:02d}h.html"
     path  = os.path.join(output_dir, fname)
     with open(path, "w", encoding="utf-8") as f:
         f.write(html)
-
     print(f"\n  HTML         : {path}")
     return path
+
+
+if __name__ == "__main__":
+    demo_params = {
+        "raw": {
+            "city":        "Sevilla",
+            "temperature": 27.4,
+            "pressure":    1014,
+            "wind_speed":  3.2,
+            "wind_deg":    225,
+            "pm2_5":       18.5,
+            "humidity":    38,
+            "clouds":      22,
+        },
+        "temperature_norm": 0.72,
+        "density":          0.62,
+        "wind_energy":      0.28,
+        "wind_dx":         -0.707,
+        "wind_dy":          0.707,
+        "fragmentation":    0.22,
+        "veil_opacity":     30.4,
+        "risk_score":       0.18,
+        "event_type":       "none",
+        "ml_ready":         True,
+    }
+    path = generate_html(demo_params, output_dir="output")
+    print(f"\n  Abriendo en navegador...")
+    webbrowser.open(f"file://{os.path.abspath(path)}")
