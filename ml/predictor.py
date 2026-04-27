@@ -10,7 +10,7 @@ class AtmosphericPredictor:
     para el dia siguiente a partir de los datos actuales.
     """
 
-    def __init__(self, model_dir: str = "ml/models"):
+    def __init__(self, model_dir: str = "ml/models_15years"):
         self.model_dir = Path(model_dir)
         self.model        = None
         self.scaler       = None

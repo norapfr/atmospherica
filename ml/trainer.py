@@ -14,7 +14,7 @@ import joblib
 import json
 
 
-def load_features(path: str = "ml/data/features.csv") -> pd.DataFrame:
+def load_features(path: str = "ml/data_Sevilla/features15Y.csv") -> pd.DataFrame:
     df = pd.read_csv(path, index_col=0, parse_dates=True)
     print(f"Features cargadas: {df.shape[0]} dias x {df.shape[1]} columnas")
     return df
@@ -111,10 +111,10 @@ def train_random_forest(df: pd.DataFrame) -> dict:
     for feat, imp in feature_importance[:10]:
         print(f"  {feat:30s}: {imp:.4f}")
 
-    Path("ml/models").mkdir(exist_ok=True)
-    joblib.dump(final_model,  "ml/models/rf_model.pkl")
-    joblib.dump(scaler,       "ml/models/rf_scaler.pkl")
-    joblib.dump(feature_cols, "ml/models/feature_cols.pkl")
+    Path("ml/models_15years").mkdir(exist_ok=True)
+    joblib.dump(final_model,  "ml/models_15years/rf_model.pkl")
+    joblib.dump(scaler,       "ml/models_15years/rf_scaler.pkl")
+    joblib.dump(feature_cols, "ml/models_15years/feature_cols.pkl")
 
     metrics = {
         "model":        "random_forest",
@@ -127,10 +127,10 @@ def train_random_forest(df: pd.DataFrame) -> dict:
         "event_rate":   float(y.mean()),
     }
 
-    with open("ml/models/rf_metrics.json", "w") as f:
+    with open("ml/models_15years/rf_metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
 
-    print(f"\nModelo guardado en ml/models/")
+    print(f"\nModelo guardado en ml/models_15years/")
     print(f"F1 medio:  {metrics['mean_f1']:.3f}")
     print(f"AUC medio: {metrics['mean_auc']:.3f}")
 

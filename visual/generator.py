@@ -308,16 +308,29 @@ function drawViento(){
   }
   for(let i=0;i<n;i++){
     let sx,sy,len,spread;
-    if(isDom&&we>0.5){
-      sx=rnd(-W*.1,W*.3)*(Math.cos(ang)<0?-1:1)+W*.5;
-      sy=rnd(-H*.1,H*.3)*(Math.sin(ang)<0?-1:1)+H*.5;
-      len=rnd(W*.4,W*1.1+we*W*.5);
-      spread=we<.6?rnd(-.15,.15):rnd(-.3,.3);
-    } else {
-      sx=rnd(W*.02,W*.98);sy=rnd(H*.02,H*.98);
-      len=we<.2?rnd(15,50):rnd(40,180+we*200);
-      spread=we<.3?.6:.25;
-    }
+    if(isDom && we > 0.5){
+
+  const dx = Math.cos(ang);
+  const dy = Math.sin(ang);
+
+  const px = -dy;
+  const py = dx;
+
+  const offset = rnd(-Math.max(W, H)*0.6, Math.max(W, H)*0.6);
+
+  sx = W/2 + px*offset - dx*Math.max(W, H);
+  sy = H/2 + py*offset - dy*Math.max(W, H);
+
+  len = Math.max(W, H) * (1.8 + we*0.5);
+
+  spread = rnd(-0.05, 0.05);
+
+} else {
+  sx=rnd(W*.02,W*.98);
+  sy=rnd(H*.02,H*.98);
+  len=we<.2?rnd(15,50):rnd(40,180+we*200);
+  spread=we<.3?.6:.25;
+}
     const a=ang+rnd(-spread,spread);
     const ex=sx+Math.cos(a)*len,ey=sy+Math.sin(a)*len;
     const curv=we<.25?rnd(-.8,.8):rnd(-.2,.2);

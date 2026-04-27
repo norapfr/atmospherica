@@ -2,7 +2,7 @@
 import zipfile
 from pathlib import Path
 
-data_dir = Path("ml/data")
+data_dir = Path("ml/data_Sevilla")
 
 for f in sorted(data_dir.glob("era5_sevilla_20??.nc")):
     year = f.stem.split("_")[-1]

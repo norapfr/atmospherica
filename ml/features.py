@@ -6,7 +6,7 @@ import sys
 sys.stdout.reconfigure(encoding="utf-8")
 
 
-def load_era5(path="ml/data"):
+def load_era5(path="ml/data_Sevilla") -> pd.DataFrame:
     print("Cargando ERA5...")
 
     instant_files = sorted(Path(path).glob("era5_20??_instant.nc"))
@@ -202,8 +202,8 @@ if __name__ == "__main__":
     df_daily = clean_and_resample(df_raw)
     df_feat  = add_features(df_daily)
 
-    out = Path("ml/data")
+    out = Path("ml/data_Sevilla")
     out.mkdir(exist_ok=True)
-    df_feat.to_csv(out / "features.csv")
-    print(f"\nFeatures guardadas en ml/data/features.csv")
+    df_feat.to_csv(out / "features15Y.csv")
+    print(f"\nFeatures guardadas en ml/data_Sevilla/features15Y.csv")
     print(df_feat.tail())

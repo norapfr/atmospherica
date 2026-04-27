@@ -1,24 +1,34 @@
 """
-ATMOSPHERICA - Casos de prueba
-Cubre los 6 dominantes + casos extremos + ML activo/inactivo
-Uso: python test_cases.py [indice]   <- lanza uno
-     python test_cases.py all        <- lanza todos (abre N pestanas)
-     python test_cases.py            <- menu interactivo
+ATMOSPHERICA - Test pipeline REAL
+Los casos pasan por el flujo completo:
+DATA → MAP → ML → GENERATE_HTML
+
+Uso:
+    python test_cases.py [indice]
+    python test_cases.py all
+    python test_cases.py
 """
 
 import sys, os, webbrowser
-if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(encoding="utf-8")
 
-# ── Importa el generador SIN modificarlo ─────────────────────────────────
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from generator import generate_html   # ajusta si tu fichero tiene otro nombre
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+# ── PATH ────────────────────────────────────────────────────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BASE_DIR)
+sys.path.insert(0, os.path.dirname(BASE_DIR))
+
+# ── IMPORTS REALES (mismo flujo que main) ───────────────────────────────
+from mapper import map_to_visual
+from generator import generate_html
+from ml.predictor import AtmosphericPredictor
 
 OUTPUT_DIR = "output_tests"
 
-# ==========================================================================
-# CASOS DE PRUEBA
-# Cada dict sigue exactamente la estructura que espera generate_html()
-# ==========================================================================
+# ========================================================================
+# CASOS (SOLO SE USA "raw")
+# ========================================================================
 CASES = [
 
     # ── 0. TEMPERATURA domina - calor extremo verano ──────────────────
@@ -204,42 +214,79 @@ CASES = [
     },
 ]
 
+# ========================================================================
+# PIPELINE REAL (igual que main)
+# ========================================================================
+def run_pipeline(data):
+    print("\nMapeando parametros visuales...")
+    visual = map_to_visual(data)
 
-# ==========================================================================
-# RUNNER
-# ==========================================================================
-def run(idx: int):
-    case = {k: v for k, v in CASES[idx].items() if not k.startswith("_")}
-    label = CASES[idx].get("_label", f"caso {idx}")
-    print(f"\n{'='*60}")
-    print(f"  [{idx}] {label}")
-    print(f"{'='*60}")
-    path = generate_html(case, output_dir=OUTPUT_DIR)
-    url = f"file://{os.path.abspath(path)}"
-    webbrowser.open(url)
+    print("\nPrediccion ML...")
+    predictor = AtmosphericPredictor()
+    prediction = predictor.predict(data)
+
+    print(f"  Riesgo evento manana: {prediction['risk_score']:.1%}")
+    print(f"  Tipo probable: {prediction['event_type']}")
+
+    visual["risk_score"] = prediction["risk_score"]
+    visual["event_type"] = prediction["event_type"]
+    visual["ml_ready"] = prediction["ready"]
+
+    print("\nGenerando cuadro...")
+    path = generate_html(visual, output_dir=OUTPUT_DIR)
+
     return path
 
+# ========================================================================
+# RUN TEST
+# ========================================================================
+def run(idx: int):
+    case = CASES[idx]
+    data = case["raw"]
 
+    print(f"\n{'='*60}")
+    print(f"[{idx}] {case.get('_label','')}")
+    print(f"{'='*60}")
+
+    print(f"  {data['city']} — {data['temperature']:.1f}C | "
+          f"{data['pressure']} hPa | {data['wind_speed']:.1f} m/s | "
+          f"PM2.5 {data['pm2_5']:.1f}")
+
+    path = run_pipeline(data)
+
+    url = f"file://{os.path.abspath(path)}"
+    webbrowser.open(url)
+
+# ========================================================================
+# MENU
+# ========================================================================
 def menu():
-    print("\n  ATMOSPHERICA - Casos de prueba\n")
+    print("\nATMOSPHERICA - Test pipeline REAL\n")
+
     for i, c in enumerate(CASES):
-        print(f"  [{i:2d}]  {c.get('_label','?')}")
-    print(f"\n  [all]  Lanzar todos ({len(CASES)} pestanas)")
-    print(f"  [q]    Salir\n")
-    sel = input("  > ").strip().lower()
+        print(f"[{i}] {c.get('_label','?')}")
+
+    print("\n[all] Ejecutar todos")
+    print("[q] Salir\n")
+
+    sel = input("> ").strip().lower()
+
     if sel == "q":
         return
-    if sel == "all":
+    elif sel == "all":
         for i in range(len(CASES)):
             run(i)
     elif sel.isdigit() and int(sel) < len(CASES):
         run(int(sel))
     else:
-        print("  Opcion no valida.")
+        print("Opcion no valida.")
 
-
+# ========================================================================
+# ENTRYPOINT
+# ========================================================================
 if __name__ == "__main__":
     args = sys.argv[1:]
+
     if not args:
         menu()
     elif args[0] == "all":

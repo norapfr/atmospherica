@@ -1,13 +1,13 @@
 import cdsapi
 import os
 
-def download_era5(output_dir: str = "ml/data"):
+def download_era5(output_dir: str = "ml/data_Sevilla"):
     os.makedirs(output_dir, exist_ok=True)
     c = cdsapi.Client()
 
-    print("Descargando ERA5 para Sevilla (2020-2024)...\n")
+    print("Descargando ERA5 para Sevilla (2010-2024)...\n")
 
-    for year in range(2020, 2025):
+    for year in range(2010, 2025):
         print(f"Descargando año {year}...")
 
         c.retrieve(
