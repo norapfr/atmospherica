@@ -1,17 +1,8 @@
-"""
-ATMOSPHERICA v2 — Motor de dominancia climática
-El clima NO se visualiza, el clima MANDA.
-Una variable domina y deforma todo el sistema visual.
-"""
-
-import json, os, math, webbrowser
-from datetime import datetime
-
-HTML_TEMPLATE = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>ATMOSPHERICA · __CITY__</title>
+<title>ATMOSPHERICA · Seville</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   body{
@@ -85,7 +76,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 <div id="header">
-  <div id="city">ATMOSPHERICA · __CITY_UPPER__</div>
+  <div id="city">ATMOSPHERICA · SEVILLE</div>
   <div id="dominant-label" id="dom-lbl">—</div>
   <div id="dateline"></div>
 </div>
@@ -104,7 +95,31 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </div>
 
 <script>
-const C = __CLIMATE_JSON__;
+const C = {
+  "city": "Seville",
+  "date": "2026-04-27",
+  "hour": 11,
+  "temp_c": 21.41,
+  "pressure": 1014,
+  "wind_speed": 6.17,
+  "wind_dir": "ENE",
+  "wind_dx": 0.94,
+  "wind_dy": -0.342,
+  "pm25": 4.79,
+  "humidity": 64,
+  "clouds": 0,
+  "temp_norm": 0.465,
+  "pressure_norm": 0.72,
+  "wind_energy": 0.308,
+  "pm_norm": 0.064,
+  "humidity_norm": 0.625,
+  "cloud_norm": 0.0,
+  "dominant": "presion",
+  "dominant_strength": 0.72,
+  "risk_score": 0.151,
+  "event_type": "none",
+  "ml_ready": true
+};
 
 // ── RNG seeded ────────────────────────────────────────────────────────────
 function seededRng(seed){
@@ -169,15 +184,7 @@ function buildPalette(){
     A:(a=1)=>`hsla(${dt.h},${dt.s}%,${dt.l}%,${a})`,
     B:(a=1)=>`hsla(${(dt.h+137)%360},${dt.s*.8}%,${dt.l*1.1}%,${a})`,
     tempC:  (a=1)=>{const tc=C.temp_c;const hh=tc<=5?225:tc<=12?200:tc<=18?145:tc<=24?55:tc<=30?28:5;const ss=tc<=5?70:tc<=12?65:tc<=18?60:tc<=24?75:tc<=30?80:78;const ll=tc<=5?35:tc<=12?38:tc<=18?42:tc<=24?52:tc<=30?52:48;return`hsla(${hh},${ss}%,${ll}%,${a})`;},
-    windC:  (a=1)=>{
-      // Si el fondo es claro (presión/nubes dominan → pL>70), oscurecer el trazo de viento
-      const bgLight = pL > 65;
-      const wL = bgLight ? Math.max(18, 42-C.wind_energy*28) : Math.min(78, 62-C.wind_energy*28);
-      const wS = bgLight ? 70+C.wind_energy*25 : 45+C.wind_energy*40;
-      // Alpha mínimo más alto cuando el fondo es claro
-      const aMin = bgLight ? Math.max(a, a*1.0) : a;
-      return `hsla(220,${wS}%,${wL}%,${aMin})`;
-    },
+    windC:  (a=1)=>`hsla(215,${45+C.wind_energy*40}%,${62-C.wind_energy*28}%,${a})`,
     humC:   (a=1)=>`hsla(150,${35+C.humidity_norm*50}%,${55-C.humidity_norm*25}%,${a})`,
     presC:  (a=1)=>`hsla(38,${38+C.pressure_norm*38}%,${58-C.pressure_norm*22}%,${a})`,
     cloudC: (a=1)=>`hsla(210,${18+C.cloud_norm*22}%,${65-C.cloud_norm*30}%,${a})`,
@@ -323,12 +330,8 @@ function drawViento(){
     const curv=we<.25?rnd(-.8,.8):rnd(-.2,.2);
     const cpx=sx+(ex-sx)*.4+Math.cos(a+Math.PI/2)*len*curv*.4;
     const cpy=sy+(ey-sy)*.4+Math.sin(a+Math.PI/2)*len*curv*.4;
-    const lw=isDom?(we<.3?rnd(.5,1.0):we<.6?rnd(.7,1.6):rnd(1,3.5+we*2)):rnd(.6,1.6);
-    // Alpha mínimo más alto: el viento suave tiene que leerse aunque sea tenue
-    const alphaFloor = 0.18;
-    const alpha=isDom
-      ? Math.max(alphaFloor, (0.18+we*.55)*(.5+SR()*.5))
-      : Math.max(alphaFloor, (0.14+we*.35)*(.5+SR()*.5));
+    const lw=isDom?(we<.3?rnd(.3,.7):we<.6?rnd(.7,1.6):rnd(1,3.5+we*2)):rnd(.4,1.2);
+    const alpha=isDom?(0.12+we*.55)*(.5+SR()*.5):(0.08+we*.25)*(.4+SR()*.6);
     cx.beginPath();cx.moveTo(sx,sy);cx.quadraticCurveTo(cpx,cpy,ex,ey);
     cx.strokeStyle=P.windC(alpha);cx.lineWidth=lw;cx.stroke();
   }
@@ -750,13 +753,64 @@ if (C.ml_ready) {
     : risk < 0.85 ? 'ALERTA'
     : 'CRÍTICO';
 
+  const layers = [
+    {
+      icon: '~',
+      label: 'Tensión de fondo',
+      desc: `Veladura translúcida del color del evento sobre todo el canvas.`,
+      detail: risk > 0.20
+        ? `Activa — alpha ${(risk*0.16).toFixed(2)}. El fondo entero tiene un tinte ${evtEs.toLowerCase()}.`
+        : `No activa (riesgo < 20%).`,
+      active: risk > 0.20,
+    },
+    {
+      icon: fractureShape.charAt(0).toUpperCase(),
+      label: `Fracturas en el lenguaje del dominante (${domLabels[DOM].replace(' DOMINA','').replace(' DOMINAN','')})`,
+      desc: `El evento de mañana irrumpe usando la gramática visual del dominante de hoy pero en el color del evento futuro: ${fractureShape}.`,
+      detail: risk > 0.25
+        ? `Activas — ${Math.floor(risk*14)} formas intrusas distribuidas por el canvas.`
+        : `No activas (riesgo < 25%).`,
+      active: risk > 0.25,
+    },
+    {
+      icon: '▲',
+      label: 'Invasión desde los 4 bordes',
+      desc: `Triángulos que penetran desde el perímetro hacia el interior. Cuanto más riesgo, más profundo entran.`,
+      detail: risk >= 0.06
+        ? `Activa — ${Math.floor(risk*22)} triángulos, penetración ${Math.round(risk*90)}px desde cada borde.${risk>0.6?' Con triángulo interior doble (tensión acumulada).':''}`
+        : `No activa.`,
+      active: risk >= 0.06,
+    },
+    {
+      icon: '□',
+      label: 'Marco de tensión crítica',
+      desc: `Doble rectángulo interior en el color del evento: exterior difuso + interior nítido.`,
+      detail: risk > 0.75
+        ? `Visible — grosor ${(3+risk*5).toFixed(0)}px exterior + 1.5px interior.`
+        : `No visible (riesgo < 75%).`,
+      active: risk > 0.75,
+    },
+    {
+      icon: '◎',
+      label: 'Interferencia en el fondo',
+      desc: `Focos radiales del color del evento que se filtran en el gradiente base.`,
+      detail: risk > 0.85
+        ? `Activa — focos dispersos de radio variable.`
+        : `No activa (riesgo < 85%).`,
+      active: risk > 0.85,
+    },
+  ];
+
   legHtml += `
   <div class="ml-section">
     <div class="ml-title" style="color:${rCol}">◈ predicción ML — riesgo mañana</div>
     <div style="font-size:8px;color:#888;line-height:1.9;margin-bottom:10px;">
       ${risk < 0.06
         ? 'El modelo no detecta riesgo relevante. El cuadro no lleva ninguna señal de alerta.'
-        : `El modelo predice un <strong style="color:${rCol}">${evtEs}</strong> mañana con un ${pct}% de probabilidad.`
+        : `El modelo predice un <strong style="color:${rCol}">${evtEs}</strong> mañana con un ${pct}% de probabilidad.
+           Las señales visuales de mañana ya están presentes en el cuadro de hoy,
+           usando la gramática del dominante actual <strong style="color:${domColors[DOM]}">(${domLabels[DOM]})</strong>
+           pero en el color del evento futuro.`
       }
     </div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#444;letter-spacing:.08em;margin-bottom:3px;">
@@ -765,74 +819,24 @@ if (C.ml_ready) {
     <div class="ml-presence-bar">
       <div class="ml-presence-fill" style="width:${pct}%;background:${rCol};"></div>
     </div>
-    <div style="font-size:9px;color:${rCol};letter-spacing:.1em;margin-bottom:16px;">${pct}% de probabilidad</div>
-
+    <div style="font-size:9px;color:${rCol};letter-spacing:.1em;margin-bottom:14px;">${pct}% de probabilidad</div>
+    <div style="font-size:7px;color:#555;letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px;">
+      cómo aparece en el cuadro
+    </div>
+    ${layers.map(l => `
+      <div class="ml-layer-row ${l.active?'active':'inactive'}" style="border-left-color:${l.active?rCol:'transparent'};">
+        <div class="ml-layer-icon" style="color:${l.active?rCol:'#444'}">${l.icon}</div>
+        <div>
+          <span class="ml-layer-label" style="color:${l.active?'#aaa':'#555'}">${l.label}</span>
+          ${l.desc}<br>
+          <span style="color:${l.active?rCol:'#444'};font-size:7px;">${l.detail}</span>
+        </div>
+      </div>`).join('')}
     ${risk >= 0.06 ? `
-    <div style="font-size:7px;color:#555;letter-spacing:.16em;text-transform:uppercase;margin-bottom:10px;">señales del evento futuro en el cuadro de hoy</div>
-
-    <!-- Tabla de capas -->
-    <table style="width:100%;border-collapse:collapse;font-size:7px;color:#666;line-height:1.8;">
-      <thead>
-        <tr style="border-bottom:1px solid #2a2a2a;">
-          <th style="text-align:left;padding:3px 6px;color:#444;font-weight:normal;letter-spacing:.12em;width:18px;">SÍM</th>
-          <th style="text-align:left;padding:3px 6px;color:#444;font-weight:normal;letter-spacing:.12em;">QUÉ VES EN EL CUADRO</th>
-          <th style="text-align:right;padding:3px 6px;color:#444;font-weight:normal;letter-spacing:.12em;white-space:nowrap;">ACTIVACIÓN</th>
-          <th style="text-align:right;padding:3px 6px;color:#444;font-weight:normal;letter-spacing:.12em;">AHORA</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr style="border-bottom:1px solid #222;opacity:${risk>0.20?1:.35}">
-          <td style="padding:4px 6px;color:${risk>0.20?rCol:'#444'};font-size:10px;">~</td>
-          <td style="padding:4px 6px;color:${risk>0.20?'#aaa':'#555'};">
-            <strong style="color:${risk>0.20?'#bbb':'#555'};font-weight:normal;">Tinte de fondo</strong><br>
-            Veladura semitransparente en color ${evtEs.toLowerCase()} sobre todo el canvas.
-          </td>
-          <td style="padding:4px 6px;text-align:right;color:#555;white-space:nowrap;">riesgo > 20%</td>
-          <td style="padding:4px 6px;text-align:right;color:${risk>0.20?rCol:'#444'};white-space:nowrap;">${risk>0.20?'✓ ACTIVO':'— inactivo'}</td>
-        </tr>
-        <tr style="border-bottom:1px solid #222;opacity:${risk>0.25?1:.35}">
-          <td style="padding:4px 6px;color:${risk>0.25?rCol:'#444'};font-size:10px;">${fractureShape.charAt(0).toUpperCase()}</td>
-          <td style="padding:4px 6px;color:${risk>0.25?'#aaa':'#555'};">
-            <strong style="color:${risk>0.25?'#bbb':'#555'};font-weight:normal;">Fracturas (${domLabels[DOM].replace(' DOMINA','').replace(' DOMINAN','').toLowerCase()})</strong><br>
-            ${Math.floor(risk*14)} formas en color ${evtEs.toLowerCase()} usando la forma del dominante: ${fractureShape}.
-          </td>
-          <td style="padding:4px 6px;text-align:right;color:#555;white-space:nowrap;">riesgo > 25%</td>
-          <td style="padding:4px 6px;text-align:right;color:${risk>0.25?rCol:'#444'};white-space:nowrap;">${risk>0.25?'✓ ACTIVO':'— inactivo'}</td>
-        </tr>
-        <tr style="border-bottom:1px solid #222;opacity:${risk>=0.06?1:.35}">
-          <td style="padding:4px 6px;color:${risk>=0.06?rCol:'#444'};font-size:10px;">▲</td>
-          <td style="padding:4px 6px;color:${risk>=0.06?'#aaa':'#555'};">
-            <strong style="color:${risk>=0.06?'#bbb':'#555'};font-weight:normal;">Triángulos desde los bordes</strong><br>
-            ${Math.floor(risk*22)} triángulos penetrando ${Math.round(risk*90)}px desde los 4 márgenes del cuadro.${risk>0.6?' Doble triángulo interior.':''}
-          </td>
-          <td style="padding:4px 6px;text-align:right;color:#555;white-space:nowrap;">riesgo > 6%</td>
-          <td style="padding:4px 6px;text-align:right;color:${risk>=0.06?rCol:'#444'};white-space:nowrap;">${risk>=0.06?'✓ ACTIVO':'— inactivo'}</td>
-        </tr>
-        <tr style="border-bottom:1px solid #222;opacity:${risk>0.75?1:.35}">
-          <td style="padding:4px 6px;color:${risk>0.75?rCol:'#444'};font-size:10px;">□</td>
-          <td style="padding:4px 6px;color:${risk>0.75?'#aaa':'#555'};">
-            <strong style="color:${risk>0.75?'#bbb':'#555'};font-weight:normal;">Marco doble de alerta</strong><br>
-            Rectángulo difuso + rectángulo nítido enmarcando todo el cuadro en color ${evtEs.toLowerCase()}.
-          </td>
-          <td style="padding:4px 6px;text-align:right;color:#555;white-space:nowrap;">riesgo > 75%</td>
-          <td style="padding:4px 6px;text-align:right;color:${risk>0.75?rCol:'#444'};white-space:nowrap;">${risk>0.75?'✓ ACTIVO':'— inactivo'}</td>
-        </tr>
-        <tr style="opacity:${risk>0.85?1:.35}">
-          <td style="padding:4px 6px;color:${risk>0.85?rCol:'#444'};font-size:10px;">◎</td>
-          <td style="padding:4px 6px;color:${risk>0.85?'#aaa':'#555'};">
-            <strong style="color:${risk>0.85?'#bbb':'#555'};font-weight:normal;">Focos radiales en el fondo</strong><br>
-            Manchas de luz difusa en color ${evtEs.toLowerCase()} que contaminan el gradiente base.
-          </td>
-          <td style="padding:4px 6px;text-align:right;color:#555;white-space:nowrap;">riesgo > 85%</td>
-          <td style="padding:4px 6px;text-align:right;color:${risk>0.85?rCol:'#444'};white-space:nowrap;">${risk>0.85?'✓ ACTIVO':'— inactivo'}</td>
-        </tr>
-      </tbody>
-    </table>
-
     <div style="margin-top:10px;font-size:7px;color:#555;line-height:1.9;border-top:1px solid #2a2a2a;padding-top:8px;">
       <span style="color:#666;">Color del evento:</span>
       <span style="background:${rCol};color:#fff;padding:1px 6px;border-radius:1px;font-size:7px;margin:0 4px;">${evtEs}</span>
-      — ${C.event_type==='heat'?'rojo-naranja':C.event_type==='cold'?'azul frío':C.event_type==='rain'?'azul-gris':C.event_type==='wind'?'verde-azulado':'ámbar'}
+      — ${C.event_type==='heat'?'rojo-naranja (calor extremo)':C.event_type==='cold'?'azul frío (temperatura muy baja)':C.event_type==='rain'?'azul-gris (lluvia intensa)':C.event_type==='wind'?'verde-azulado (viento fuerte)':'ámbar genérico'}
     </div>` : ''}
   </div>`;
 } else {
@@ -871,100 +875,4 @@ function saveImg(){
 }
 </script>
 </body>
-</html>"""
-
-
-def _wind_label(deg):
-    dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO']
-    return dirs[int((deg + 11.25) / 22.5) % 16]
-
-
-def _compute_dominant(params):
-    scores = {
-        'temperatura': params['temperature_norm'],
-        'viento':      params['wind_energy'],
-        'humedad':     params['veil_opacity'] / 80.0,
-        'presion':     params['density'],
-        'nubes':       params['raw'].get('clouds', 15) / 100.0,
-        'pm25':        params['fragmentation'],
-    }
-    dominant = max(scores, key=scores.get)
-    return dominant, scores[dominant], scores
-
-
-def generate_html(visual_params: dict, output_dir: str = "output") -> str:
-    os.makedirs(output_dir, exist_ok=True)
-    data  = visual_params["raw"]
-    now   = datetime.now()
-    date  = now.strftime("%Y-%m-%d")
-    hour  = now.hour
-    city  = data["city"]
-
-    t     = visual_params["temperature_norm"]
-    we    = visual_params["wind_energy"]
-    hum   = visual_params["veil_opacity"] / 80.0
-    pnorm = visual_params["density"]
-    pm    = visual_params["fragmentation"]
-    cld   = data.get("clouds", 15) / 100.0
-
-    dominant, dom_strength, scores = _compute_dominant(visual_params)
-    risk_score = visual_params.get("risk_score", 0.0)
-    event_type = visual_params.get("event_type", "none")
-    ml_ready   = visual_params.get("ml_ready", False)
-
-    climate_data = {
-        "city": city, "date": date, "hour": hour,
-        "temp_c": data["temperature"], "pressure": data["pressure"],
-        "wind_speed": data["wind_speed"], "wind_dir": _wind_label(data["wind_deg"]),
-        "wind_dx": round(visual_params["wind_dx"], 3),
-        "wind_dy": round(visual_params["wind_dy"], 3),
-        "pm25": data["pm2_5"], "humidity": data["humidity"],
-        "clouds": data.get("clouds", 15),
-        "temp_norm": round(t, 3), "pressure_norm": round(pnorm, 3),
-        "wind_energy": round(we, 3), "pm_norm": round(pm, 3),
-        "humidity_norm": round(hum, 3), "cloud_norm": round(cld, 3),
-        "dominant": dominant, "dominant_strength": round(dom_strength, 3),
-        "risk_score": round(risk_score, 3),
-        "event_type": event_type, "ml_ready": ml_ready,
-    }
-
-    print(f"\n  Ciudad       : {city}")
-    print(f"  Fecha        : {date}  Hora: {hour}h")
-    print(f"  DOMINANTE    : {dominant.upper()} ({dom_strength:.1%})")
-    print(f"  Temperatura  : {data['temperature']:.1f}°C  (norm {t:.2f})")
-    print(f"  Viento       : {data['wind_speed']:.1f} m/s  (energía {we:.2f})")
-    print(f"  Humedad      : {data['humidity']}%  (norm {hum:.2f})")
-    print(f"  Presión      : {data['pressure']} hPa  (norm {pnorm:.2f})")
-    print(f"  Nubes        : {data.get('clouds', 15)}%  (norm {cld:.2f})")
-    print(f"  PM2.5        : {data['pm2_5']:.1f} µg/m³  (norm {pm:.2f})")
-    print(f"  ML riesgo    : {risk_score:.1%}  evento: {event_type}")
-
-    # ── Sustitución segura: sin .format(), sin conflictos de llaves ──────
-    html = HTML_TEMPLATE
-    html = html.replace("__CITY__", city)
-    html = html.replace("__CITY_UPPER__", city.upper())
-    html = html.replace("__CLIMATE_JSON__",
-                        json.dumps(climate_data, indent=2, ensure_ascii=False))
-
-    fname = f"atmospherica_{city.replace(' ', '_')}_{date}_{hour:02d}h.html"
-    path  = os.path.join(output_dir, fname)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(html)
-    print(f"\n  HTML         : {path}")
-    return path
-
-
-if __name__ == "__main__":
-    params = {
-        "raw": {
-            "city": "Sevilla", "temperature": 24.5, "pressure": 1012,
-            "wind_speed": 5.8, "wind_deg": 270, "pm2_5": 14.2,
-            "humidity": 45, "clouds": 35,
-        },
-        "temperature_norm": 0.65, "density": 0.58, "wind_energy": 0.52,
-        "wind_dx": -1.0, "wind_dy": 0.0,
-        "fragmentation": 0.18, "veil_opacity": 36.0,
-        "risk_score": 0.42, "event_type": "wind", "ml_ready": True,
-    }
-    path = generate_html(params, output_dir="output")
-    webbrowser.open(f"file://{os.path.abspath(path)}")
+</html>

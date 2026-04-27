@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ATMOSPHERICA · Seville</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:#1a1814;
+    font-family:'Courier New',monospace;
+    display:flex;flex-direction:column;align-items:center;
+    padding:20px 16px 32px;min-height:100vh;
+  }
+  #header{
+    width:100%;max-width:900px;
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-bottom:14px;padding-bottom:8px;
+    border-bottom:1px solid #333;
+  }
+  #city{font-size:9px;color:#888;letter-spacing:.32em;text-transform:uppercase;}
+  #dateline{font-size:8px;color:#555;letter-spacing:.12em;}
+  #dominant-label{
+    font-size:7px;color:#fff;letter-spacing:.3em;text-transform:uppercase;
+    padding:3px 8px;border:1px solid currentColor;margin-right:auto;margin-left:18px;
+  }
+  #canvas-wrap{width:100%;max-width:900px;}
+  canvas{display:block;width:100%;height:auto;}
+  #legend{
+    width:100%;max-width:900px;margin-top:22px;
+    border-top:1px solid #2a2a2a;padding-top:18px;
+  }
+  #legend h2{font-size:7px;color:#444;letter-spacing:.28em;text-transform:uppercase;margin-bottom:14px;font-weight:normal;}
+  .leg-row{display:flex;gap:8px;align-items:baseline;margin-bottom:7px;}
+  .leg-sym{font-size:10px;flex-shrink:0;width:16px;}
+  .leg-txt{font-size:7.5px;color:#666;letter-spacing:.05em;line-height:1.7;}
+  .leg-txt strong{color:#aaa;font-weight:normal;letter-spacing:.1em;}
+  .val{display:inline-block;background:#252320;color:#999;padding:1px 5px;border-radius:1px;font-size:7px;}
+  #dominant-section{
+    padding:14px;border:1px solid #333;margin-bottom:16px;background:#1e1c18;
+  }
+  #dominant-section h3{font-size:7px;letter-spacing:.3em;text-transform:uppercase;margin-bottom:8px;font-weight:normal;}
+  .dom-bar{height:3px;background:#333;margin:4px 0;}
+  .dom-fill{height:100%;transition:width .4s;}
+  #footer{width:100%;max-width:900px;margin-top:12px;display:flex;justify-content:space-between;align-items:center;}
+  #edition{font-size:7px;color:#444;letter-spacing:.2em;}
+  #save{padding:5px 16px;background:transparent;border:1px solid #333;color:#666;
+    font-family:monospace;font-size:7px;letter-spacing:.18em;cursor:pointer;transition:.2s;}
+  #save:hover{border-color:#888;color:#ccc;}
+  #status{font-size:7px;color:#444;margin-top:3px;text-align:right;min-height:12px;}
+</style>
+</head>
+<body>
+<div id="header">
+  <div id="city">ATMOSPHERICA · SEVILLE</div>
+  <div id="dominant-label" id="dom-lbl">—</div>
+  <div id="dateline"></div>
+</div>
+<div id="canvas-wrap"><canvas id="c" width="900" height="1080"></canvas></div>
+<div id="legend">
+  <div id="dominant-section">
+    <h3 id="dom-title">variable dominante</h3>
+    <div id="dom-bars"></div>
+  </div>
+  <h2>clave visual</h2>
+  <div id="leg-content"></div>
+</div>
+<div id="footer">
+  <div id="edition"></div>
+  <div><button id="save" onclick="saveImg()">GUARDAR PNG</button><div id="status"></div></div>
+</div>
+
+<script>
+const C = {
+  "city": "Seville",
+  "date": "2026-04-26",
+  "hour": 22,
+  "temp_c": 22.06,
+  "pressure": 1015,
+  "wind_speed": 2.57,
+  "wind_dir": "SE",
+  "wind_dx": 0.766,
+  "wind_dy": 0.643,
+  "pm25": 4.41,
+  "humidity": 53,
+  "clouds": 0,
+  "temp_norm": 0.48,
+  "pressure_norm": 0.738,
+  "wind_energy": 0.129,
+  "pm_norm": 0.059,
+  "humidity_norm": 0.5,
+  "cloud_norm": 0.0,
+  "dominant": "presion",
+  "dominant_strength": 0.738,
+  "risk_score": 0.05,
+  "event_type": "none",
+  "ml_ready": true
+};
+
+// ── RNG seeded ────────────────────────────────────────────────────────────
+function seededRng(seed){
+  let s=seed>>>0;
+  return ()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return(s>>>0)/4294967296;};
+}
+let sv=0;
+const ks=C.date.replace(/-/g,'')+C.hour+C.city;
+for(let i=0;i<ks.length;i++) sv=(sv*31+ks.charCodeAt(i))|0;
+const SR=seededRng(Math.abs(sv)||99991);
+const rnd=(a,b)=>a+SR()*(b-a);
+const ri=(a,b)=>Math.floor(rnd(a,b+1));
+const rp=arr=>arr[Math.floor(SR()*arr.length)];
+const TAU=Math.PI*2;
+const W=900, H=1080;
+const cv=document.getElementById('c');
+const cx=cv.getContext('2d');
+
+// ── Variables normalizadas ────────────────────────────────────────────────
+const VARS = {
+  temperatura: C.temp_norm,
+  viento:      C.wind_energy,
+  humedad:     C.humidity_norm,
+  presion:     C.pressure_norm,
+  nubes:       C.cloud_norm,
+  pm25:        C.pm_norm,
+};
+
+// Calcular dominante
+let domKey='temperatura', domVal=0;
+for(const[k,v]of Object.entries(VARS)) if(v>domVal){domVal=v;domKey=k;}
+const DOM=domKey;
+const DOM_STRENGTH=domVal;
+
+// ── Sistema de color basado en dominante + hora ───────────────────────────
+function buildPalette(){
+  const h=C.hour;
+  // Base paper por hora
+  let bgL=93, bgS=8, bgH=38;
+  if(h<5)  {bgH=220;bgS=18;bgL=12;}
+  else if(h<8)  {bgH=28;bgS=30;bgL=72;}
+  else if(h<12) {bgH=42;bgS=18;bgL=88;}
+  else if(h<16) {bgH=200;bgS=14;bgL=90;}
+  else if(h<20) {bgH=25;bgS=28;bgL=78;}
+  else          {bgH=230;bgS=20;bgL=18;}
+
+  // Tono dominante sobreimpuesto
+  const domTints={
+    temperatura:{h:28, s:70, l:52},
+    viento:     {h:215,s:60, l:48},
+    humedad:    {h:148,s:55, l:44},
+    presion:    {h:40, s:50, l:48},
+    nubes:      {h:210,s:22, l:60},
+    pm25:       {h:285,s:45, l:40},
+  };
+  const dt=domTints[DOM];
+  // Mezcla: paper con tinte del dominante proporcional a DOM_STRENGTH
+  const mix=DOM_STRENGTH*.35;
+  const pH=bgH*(1-mix)+dt.h*mix;
+  const pS=bgS*(1-mix)+dt.s*mix*.3;
+  const pL=bgL*(1-mix)+dt.l*mix*.2;
+
+  return {
+    paper:`hsl(${pH},${pS}%,${pL}%)`,
+    paperHsl:[pH,pS,pL],
+    dom: dt,
+    ink:`hsl(${dt.h},${dt.s}%,${dt.l*0.4}%)`,
+    A:(a=1)=>`hsla(${dt.h},${dt.s}%,${dt.l}%,${a})`,
+    B:(a=1)=>`hsla(${(dt.h+137)%360},${dt.s*.8}%,${dt.l*1.1}%,${a})`,
+    // Cada variable tiene su color fijo
+    tempC:  (a=1)=>{const tc=C.temp_c;const hh=tc<=5?225:tc<=12?200:tc<=18?145:tc<=24?55:tc<=30?28:5;const ss=tc<=5?70:tc<=12?65:tc<=18?60:tc<=24?75:tc<=30?80:78;const ll=tc<=5?35:tc<=12?38:tc<=18?42:tc<=24?52:tc<=30?52:48;return`hsla(${hh},${ss}%,${ll}%,${a})`;},
+    windC:  (a=1)=>`hsla(215,${45+C.wind_energy*40}%,${62-C.wind_energy*28}%,${a})`,
+    humC:   (a=1)=>`hsla(150,${35+C.humidity_norm*50}%,${55-C.humidity_norm*25}%,${a})`,
+    presC:  (a=1)=>`hsla(38,${38+C.pressure_norm*38}%,${58-C.pressure_norm*22}%,${a})`,
+    cloudC: (a=1)=>`hsla(210,${18+C.cloud_norm*22}%,${65-C.cloud_norm*30}%,${a})`,
+    pmC:    (a=1)=>`hsla(285,${30+C.pm_norm*50}%,${52-C.pm_norm*28}%,${a})`,
+  };
+}
+const P=buildPalette();
+
+// ── Modificadores globales por dominante ──────────────────────────────────
+const MOD = {
+  // Ángulo global de rotación (viento lo rota TODO)
+  globalAngle: DOM==='viento' ? Math.atan2(C.wind_dy,C.wind_dx)*0.7 : 0,
+  // Factor de escala global
+  globalScale: DOM==='temperatura' ? 0.85+DOM_STRENGTH*0.35
+             : DOM==='viento'       ? 0.9+DOM_STRENGTH*0.2
+             : 1.0,
+  // Difusión de bordes (humedad)
+  blur: DOM==='humedad' ? DOM_STRENGTH*4 : 0,
+  // Factor de ruido (PM)
+  noise: DOM==='pm25' ? DOM_STRENGTH : 0,
+  // Aplastamiento vertical (nubes)
+  squish: DOM==='nubes' ? 1-DOM_STRENGTH*0.3 : 1,
+  // Rigidez de composición (presión)
+  rigid: DOM==='presion' ? DOM_STRENGTH : 0,
+};
+
+// ── Fondo ─────────────────────────────────────────────────────────────────
+function drawFondo(){
+  cx.fillStyle=P.paper;
+  cx.fillRect(0,0,W,H);
+
+  // Gradiente direccional según hora + dominante
+  const h=C.hour;
+  let lx=W*.5, ly=H*.5;
+  if(h<6)        {lx=W*.5; ly=H*1.1;}
+  else if(h<10)  {lx=W*.1; ly=H*.8;}
+  else if(h<13)  {lx=W*.55;ly=-H*.1;}
+  else if(h<17)  {lx=W*.9; ly=H*.15;}
+  else if(h<20)  {lx=W*.85;ly=H*.6;}
+  else           {lx=W*.4; ly=H*1.15;}
+
+  // Si hay viento domina, el gradiente se va hacia la dirección
+  if(DOM==='viento'){
+    lx=W*.5+Math.cos(Math.atan2(C.wind_dy,C.wind_dx))*W*.4;
+    ly=H*.5+Math.sin(Math.atan2(C.wind_dy,C.wind_dx))*H*.4;
+  }
+
+  const [pH,pS,pL]=P.paperHsl;
+  const g=cx.createRadialGradient(lx,ly,0,lx,ly,W*1.2);
+  g.addColorStop(0,P.A(0.12+DOM_STRENGTH*0.12));
+  g.addColorStop(.6,P.A(0.03));
+  g.addColorStop(1,`hsla(${(pH+60)%360},${pS}%,${pL*0.85}%,0.08)`);
+  cx.fillStyle=g;
+  cx.fillRect(0,0,W,H);
+
+  // Peso extra según dominante
+  if(DOM==='nubes'){
+    // Oscurece la parte superior
+    const ng=cx.createLinearGradient(0,0,0,H*.6);
+    ng.addColorStop(0,P.cloudC(0.15+C.cloud_norm*0.25));
+    ng.addColorStop(1,'rgba(0,0,0,0)');
+    cx.fillStyle=ng;
+    cx.fillRect(0,0,W,H);
+  }
+  if(DOM==='pm25'){
+    // Velo plano general
+    cx.fillStyle=P.pmC(C.pm_norm*0.18);
+    cx.fillRect(0,0,W,H);
+  }
+}
+
+// ── Generador de posiciones NO uniformes ─────────────────────────────────
+// Evita distribución regular — clústeres, vacíos, zonas saturadas
+function generatePositions(n, domKey){
+  const pts=[];
+  // Gravedad: el dominante atrae las formas hacia su zona característica
+  const gravX = domKey==='viento' ? rnd(.5,.9)
+               : domKey==='presion' ? rnd(.3,.7)
+               : domKey==='nubes'   ? rnd(.3,.7)
+               : rnd(.15,.85);
+  const gravY = domKey==='nubes'   ? rnd(.1,.4)
+               : domKey==='presion' ? rnd(.4,.6)
+               : rnd(.1,.9);
+
+  const tries=n*20;
+  for(let i=0;i<tries&&pts.length<n;i++){
+    // Posición bimodal: cerca del centro de gravedad o completamente libre
+    let x,y;
+    if(SR()<0.5+DOM_STRENGTH*0.25){
+      // Clúster cerca del centro de gravedad
+      x=gravX*W+rnd(-W*.25,W*.25);
+      y=gravY*H+rnd(-H*.2,H*.2);
+    } else {
+      // Posición libre con jitter
+      x=rnd(W*.03,W*.97);
+      y=rnd(H*.03,H*.97);
+    }
+    x=Math.max(W*.03,Math.min(W*.97,x));
+    y=Math.max(H*.03,Math.min(H*.97,y));
+    // Sin mínima distancia forzada — permitir solapamientos
+    const minD=(W+H)/(n*3.5)*(1-DOM_STRENGTH*0.4);
+    if(!pts.some(([ex,ey])=>Math.hypot(x-ex,y-ey)<minD)) pts.push([x,y]);
+  }
+  return pts;
+}
+
+// ── TEMPERATURA — círculos invasivos ──────────────────────────────────────
+function drawTemperatura(){
+  const t=C.temp_norm;
+  const isDom=DOM==='temperatura';
+  // Más círculos, más grandes, más solapados si es dominante
+  const n=isDom ? ri(4,7+Math.floor(DOM_STRENGTH*6)) : ri(2,4);
+  const baseR=isDom ? 60+t*160 : 30+t*70;
+  const pts=generatePositions(n,'temperatura');
+
+  // Si dominante: rotación global del canvas
+  if(isDom && MOD.globalAngle!==0){
+    cx.save();
+    cx.translate(W/2,H/2);
+    cx.rotate(MOD.globalAngle*0.15);
+    cx.translate(-W/2,-H/2);
+  }
+
+  // Deformación por viento: los círculos se alargan en la dirección del viento
+  const windDeform=C.wind_energy>0.3 ? C.wind_energy*.5 : 0;
+  const windAng=Math.atan2(C.wind_dy,C.wind_dx);
+
+  for(let i=0;i<pts.length;i++){
+    const[x,y]=pts[i];
+    // Tamaño no uniforme — el primero puede ser gigante
+    const sizeRand=i===0&&isDom ? rnd(.8,1.4) : rnd(.3,.9);
+    const R=baseR*sizeRand;
+    const nAnillos=isDom ? ri(3,6+Math.floor(t*4)) : ri(2,4);
+
+    cx.save();
+    cx.translate(x,y);
+    // Aplastamiento vertical si nubes dominan
+    cx.scale(1+windDeform*Math.cos(windAng*2)*.3, MOD.squish*(1-windDeform*Math.sin(windAng*2)*.2));
+    // Difusión si humedad dominan
+    if(MOD.blur>0.5) cx.filter=`blur(${MOD.blur*.8}px)`;
+
+    for(let a=0;a<nAnillos;a++){
+      const r=R*(1-a/nAnillos);
+      const offset=a/(nAnillos-1||1);
+      const tc=C.temp_c;
+      const hh=tc<=5?225:tc<=12?200:tc<=18?145:tc<=24?55:tc<=30?28:5;
+      const ss=tc<=5?70:tc<=12?65:tc<=18?60:tc<=24?75:tc<=30?80:78;
+      const ll=(tc<=5?25:tc<=12?32:tc<=18?35:tc<=24?42:tc<=30?45:40)+offset*30;
+      cx.beginPath();
+      cx.arc(0,0,r,0,TAU);
+      const alpha=isDom ? (0.75+a*(0.25/nAnillos)) : (0.55+a*(0.2/nAnillos));
+      cx.fillStyle=`hsla(${hh},${ss}%,${ll}%,${alpha})`;
+      cx.fill();
+      if(a<nAnillos-1){
+        cx.strokeStyle='rgba(0,0,0,0.08)';
+        cx.lineWidth=0.6;
+        cx.stroke();
+      }
+    }
+    // Arco exterior (deformado)
+    const as=rnd(0,TAU), asp=rnd(Math.PI*.3, isDom?Math.PI*1.6:Math.PI*.9);
+    cx.beginPath();
+    cx.arc(0,0,R*1.15,as,as+asp);
+    cx.strokeStyle=P.tempC(0.35+t*.2);
+    cx.lineWidth=isDom?1.8+t*1.5:0.8;
+    cx.globalAlpha=0.5;
+    cx.stroke();
+    cx.globalAlpha=1;
+    // Punto central
+    cx.beginPath();
+    cx.arc(0,0,Math.max(2.5,R*.04),0,TAU);
+    cx.fillStyle='rgba(255,255,255,0.9)';
+    cx.fill();
+    cx.filter='none';
+    cx.restore();
+  }
+  if(isDom && MOD.globalAngle!==0) cx.restore();
+}
+
+// ── VIENTO — curvas que dominan/orientan TODO ─────────────────────────────
+function drawViento(){
+  const we=C.wind_energy;
+  const isDom=DOM==='viento';
+  const ang=Math.atan2(C.wind_dy,C.wind_dx);
+  // Número de líneas: calma=pocas cortas, temporal=muchas que cruzan canvas
+  const n=isDom
+    ? (we<.3 ? ri(8,16) : we<.6 ? ri(20,40) : ri(50,90))
+    : ri(6,12+we*15);
+
+  if(isDom && we>0.5){
+    // Rotación global del canvas en la dirección del viento
+    cx.save();
+    cx.translate(W/2,H/2);
+    cx.rotate(ang*0.08*we);
+    cx.translate(-W/2,-H/2);
+  }
+
+  for(let i=0;i<n;i++){
+    // Líneas largas que cruzan el canvas si dominante+fuerte
+    let sx,sy,len,spread;
+    if(isDom && we>0.5){
+      // Empiezan desde el borde de entrada
+      sx=rnd(-W*.1,W*.3)*(Math.cos(ang)<0?-1:1)+W*.5;
+      sy=rnd(-H*.1,H*.3)*(Math.sin(ang)<0?-1:1)+H*.5;
+      len=rnd(W*.4, W*1.1+we*W*.5);
+      spread=we<.6 ? rnd(-.15,.15) : rnd(-.3,.3);
+    } else {
+      sx=rnd(W*.02,W*.98); sy=rnd(H*.02,H*.98);
+      len=we<.2?rnd(15,50):rnd(40,180+we*200);
+      spread=we<.3?.6:.25;
+    }
+    const a=ang+rnd(-spread,spread);
+    const ex=sx+Math.cos(a)*len, ey=sy+Math.sin(a)*len;
+    const curv=we<.25 ? rnd(-.8,.8) : rnd(-.2,.2);
+    const cpx=sx+(ex-sx)*.4+Math.cos(a+Math.PI/2)*len*curv*.4;
+    const cpy=sy+(ey-sy)*.4+Math.sin(a+Math.PI/2)*len*curv*.4;
+
+    // Grosor: más fino si calma, más grueso si temporal
+    const lw=isDom
+      ? (we<.3 ? rnd(.3,.7) : we<.6 ? rnd(.7,1.6) : rnd(1,3.5+we*2))
+      : rnd(.4,1.2);
+    const alpha=isDom
+      ? (0.12+we*.55)*(.5+SR()*.5)
+      : (0.08+we*.25)*(.4+SR()*.6);
+
+    cx.beginPath(); cx.moveTo(sx,sy); cx.quadraticCurveTo(cpx,cpy,ex,ey);
+    cx.strokeStyle=P.windC(alpha);
+    cx.lineWidth=lw;
+    cx.stroke();
+  }
+  if(isDom && we>0.5) cx.restore();
+}
+
+// ── PRESIÓN — rectángulos rígidos, bandas arquitectónicas ─────────────────
+function drawPresion(){
+  const p=C.pressure_norm;
+  const isDom=DOM==='presion';
+  const nFajas=isDom ? ri(5,10+Math.floor(p*8)) : ri(2,5);
+
+  for(let i=0;i<nFajas;i++){
+    let x,y,w,h2,angle;
+    if(isDom && p>0.5){
+      // Bandas horizontales ordenadas, casi paralelas
+      const band=(i+.5)/nFajas;
+      y=H*band+rnd(-H/(nFajas*2.5), H/(nFajas*2.5));
+      w=rnd(W*.3,W*.9);
+      h2=rnd(5,20+p*30);
+      x=rnd(-W*.05, W*.15);
+      angle=rnd(-0.02,0.02); // casi perfecto horizontal
+    } else {
+      y=rnd(H*.04,H*.96);
+      w=rnd(W*.08,W*.5);
+      h2=rnd(4,18+p*20);
+      x=rnd(0,W-w);
+      angle=rnd(-.15,.15);
+    }
+    const alpha=isDom ? (0.35+p*.45) : (0.15+p*.3);
+    cx.save();
+    cx.translate(x+w/2,y);
+    cx.rotate(angle);
+    // Deformación: si viento dominante, los rectángulos se inclinan
+    if(DOM==='viento' && C.wind_energy>0.4){
+      cx.shear=cx.transform;
+      cx.transform(1, Math.sin(Math.atan2(C.wind_dy,C.wind_dx))*C.wind_energy*.3,0,1,0,0);
+    }
+    cx.fillStyle=P.presC(alpha);
+    cx.fillRect(-w/2,-h2/2,w,h2);
+    // Borde sutil
+    if(isDom){
+      cx.strokeStyle=P.presC(alpha*0.5);
+      cx.lineWidth=.5;
+      cx.strokeRect(-w/2,-h2/2,w,h2);
+    }
+    cx.restore();
+  }
+
+  // Bloques de anclaje en esquinas si presión alta
+  if(isDom && p>0.55){
+    const anchors=[[0,0,1,1],[W,0,-1,1],[0,H,1,-1],[W,H,-1,-1]];
+    for(const[bx,by,sx2,sy2]of anchors){
+      if(SR()>.4) continue;
+      const aw=30+p*90, ah=12+p*35;
+      cx.fillStyle=P.presC(.45+p*.35);
+      cx.fillRect(sx2===1?bx:bx-aw, sy2===1?by:by-ah, aw,ah);
+    }
+  }
+}
+
+// ── HUMEDAD — formas blandas, bordes difusos, expansión ───────────────────
+function drawHumedad(){
+  const hum=C.humidity_norm;
+  const isDom=DOM==='humedad';
+  const n=isDom ? ri(4,8+Math.floor(hum*10)) : ri(2,4+hum*4);
+
+  for(let i=0;i<n;i++){
+    // Posición: si dominante, se expanden por todo el canvas (sin esquinas vacías)
+    const x=isDom ? rnd(W*.02,W*.98) : rnd(W*.04,W*.96);
+    const y=isDom ? rnd(H*.02,H*.98) : rnd(H*.04,H*.96);
+    const size=isDom ? (15+hum*80+rnd(-10,20)) : (8+hum*40);
+
+    if(hum<0.35 && !isDom){
+      // Triángulos nítidos en baja humedad
+      cx.save(); cx.translate(x,y); cx.rotate(rnd(0,TAU));
+      cx.beginPath();
+      cx.moveTo(0,-size); cx.lineTo(size*.87,size*.5); cx.lineTo(-size*.87,size*.5);
+      cx.closePath();
+      cx.fillStyle=P.humC(0.2+hum*.35);
+      cx.fill();
+      cx.strokeStyle=P.humC(0.5);
+      cx.lineWidth=0.8; cx.stroke();
+      cx.restore();
+    } else {
+      // Elipses blandas con difusión proporcional a humedad
+      const rx=size*(0.6+SR()*.7);
+      const ry=size*(0.35+SR()*.5);
+      const angle=rnd(0,TAU);
+      if(isDom && MOD.blur>0) cx.filter=`blur(${MOD.blur*.6}px)`;
+      cx.save(); cx.translate(x,y); cx.rotate(angle);
+      cx.beginPath(); cx.ellipse(0,0,rx,ry,0,0,TAU);
+      const alpha=isDom ? (0.12+hum*.35) : (0.08+hum*.22);
+      cx.fillStyle=P.humC(alpha);
+      cx.fill();
+      cx.strokeStyle=P.humC(alpha*1.8);
+      cx.lineWidth=isDom?.7:.5; cx.stroke();
+      if(isDom && hum>0.5){
+        // Halo exterior difuso
+        const hg=cx.createRadialGradient(0,0,ry*.5,0,0,rx*1.5);
+        hg.addColorStop(0,P.humC(hum*.2));
+        hg.addColorStop(1,'rgba(0,0,0,0)');
+        cx.fillStyle=hg;
+        cx.beginPath(); cx.ellipse(0,0,rx*1.5,ry*1.5,0,0,TAU);
+        cx.fill();
+      }
+      cx.filter='none';
+      cx.restore();
+    }
+  }
+}
+
+// ── NUBES — rombos con peso hacia arriba ──────────────────────────────────
+function drawNubes(){
+  const cld=C.cloud_norm;
+  const isDom=DOM==='nubes';
+  if(cld<.04&&!isDom) return;
+  const n=isDom ? ri(8,18+Math.floor(cld*12)) : ri(2,7+cld*7);
+
+  for(let i=0;i<n;i++){
+    let x,y;
+    if(isDom){
+      // Peso visual en parte superior — distribución asimétrica
+      x=rnd(W*.02,W*.98);
+      y=SR()<(0.35+cld*0.4) ? rnd(H*.02,H*.45) : rnd(H*.45,H*.95);
+    } else {
+      x=rnd(W*.04,W*.96); y=rnd(H*.03,H*.97);
+    }
+    // Aplastamiento vertical si dominante
+    const scaleY=isDom ? (0.4+cld*.4)*MOD.squish : (0.45+rnd(0,.35));
+    const w=isDom ? (25+cld*100+rnd(0,40)) : (18+cld*60+rnd(0,20));
+    const h2=w*scaleY;
+    const angle=isDom ? rnd(-0.1,0.1) : rnd(-0.2,0.2);
+
+    cx.save(); cx.translate(x,y); cx.rotate(angle);
+    cx.beginPath();
+    cx.moveTo(0,-h2); cx.lineTo(w,0); cx.lineTo(0,h2); cx.lineTo(-w,0);
+    cx.closePath();
+    const alpha=isDom ? (0.25+cld*.5) : (0.15+cld*.35);
+    cx.fillStyle=P.cloudC(alpha);
+    cx.fill();
+    cx.strokeStyle=P.cloudC(alpha*1.5);
+    cx.lineWidth=isDom ? 1.2+cld*1.5 : 0.7;
+    cx.stroke();
+    cx.restore();
+  }
+}
+
+// ── PM2.5 — ruido que ensucia TODO ────────────────────────────────────────
+function drawPM(){
+  const pm=C.pm_norm;
+  const isDom=DOM==='pm25';
+  if(pm<.04&&!isDom) return;
+
+  // Veladura base
+  const veloAlpha=isDom ? pm*0.28 : pm*0.12;
+  cx.fillStyle=P.pmC(veloAlpha);
+  cx.fillRect(0,0,W,H);
+
+  // Capas de manchas nebulosas si dominante
+  if(isDom && pm>0.2){
+    const nm=ri(3,7);
+    for(let i=0;i<nm;i++){
+      const mx=rnd(W*.05,W*.95), my=rnd(H*.05,H*.95);
+      const r=rnd(100,300);
+      const mg=cx.createRadialGradient(mx,my,0,mx,my,r);
+      mg.addColorStop(0,P.pmC(pm*.3));
+      mg.addColorStop(1,'rgba(0,0,0,0)');
+      cx.fillStyle=mg; cx.fillRect(0,0,W,H);
+    }
+  }
+
+  // Partículas
+  const nPart=isDom
+    ? ri(40+pm*200, 80+pm*400)
+    : ri(10+pm*60, 25+pm*100);
+  for(let i=0;i<nPart;i++){
+    const x=rnd(0,W), y=rnd(0,H);
+    const r=isDom ? rnd(1.5+pm*2.5,5+pm*9) : rnd(1,3+pm*4);
+    cx.beginPath(); cx.arc(x,y,r,0,TAU);
+    cx.fillStyle=P.pmC(isDom ? (.28+pm*.55) : (.15+pm*.35));
+    cx.fill();
+  }
+
+  // Si PM es dominante: líneas de smog que cruzan el canvas
+  if(isDom && pm>0.45){
+    const nLines=ri(4,10);
+    for(let i=0;i<nLines;i++){
+      const y=rnd(H*.05,H*.95);
+      cx.beginPath(); cx.moveTo(0,y);
+      const cp1x=W*.3+rnd(-50,50), cp1y=y+rnd(-30,30);
+      const cp2x=W*.7+rnd(-50,50), cp2y=y+rnd(-30,30);
+      cx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,W,y+rnd(-20,20));
+      cx.strokeStyle=P.pmC(0.12+pm*.18);
+      cx.lineWidth=rnd(8,30+pm*20);
+      cx.stroke();
+    }
+  }
+}
+
+// ── ML RIESGO — el futuro se filtra en el presente ────────────────────────
+// El riesgo NO se superpone: contamina el sistema de dominancia actual.
+// Lógica: el evento de mañana "presiona" desde los bordes y se mezcla
+// con las formas del dominante de hoy, distorsionando su lenguaje visual.
+function drawML(){
+  if(!C.ml_ready || C.risk_score<.06) return;
+  const risk=C.risk_score;
+
+  // Color del evento esperado mañana — cada tipo tiene su firma cromática
+  let rH, rS, rL, evtLabel;
+  if     (C.event_type==='heat') {rH=8;  rS=85; rL=50; evtLabel='calor';}
+  else if(C.event_type==='cold') {rH=215;rS=78; rL=42; evtLabel='frío';}
+  else if(C.event_type==='rain') {rH=200;rS=72; rL=40; evtLabel='lluvia';}
+  else if(C.event_type==='wind') {rH=155;rS=62; rL=38; evtLabel='viento';}
+  else                           {rH=45; rS=70; rL=46; evtLabel='genérico';}
+  const rc = (a)=>`hsla(${rH},${rS}%,${rL}%,${a})`;
+
+  // ── 1. TENSIÓN DE FONDO ─────────────────────────────────────────────────
+  // Riesgo bajo (<25%): nada. Riesgo medio: velo sutilísimo.
+  // Riesgo alto: el color del evento tiñe toda la escena.
+  if(risk > .20) {
+    cx.fillStyle = rc(risk * 0.16);
+    cx.fillRect(0,0,W,H);
+  }
+
+  // ── 2. FRACTURAS EN EL SISTEMA DEL DOMINANTE ───────────────────────────
+  // El riesgo "rompe" el lenguaje visual dominante con intrusiones del
+  // evento futuro. Las formas intrusas usan el MISMO idioma del dominante
+  // pero con el color del riesgo — como si mañana ya empezara a coexistir.
+  if(risk > .25) {
+    const nFrac = Math.floor(risk * 14);
+    for(let i=0; i<nFrac; i++) {
+      const x=rnd(W*.04, W*.96), y=rnd(H*.04, H*.96);
+      const a=rnd(0,TAU);
+      const sz = 4 + risk*18 + rnd(0,10);
+      const alpha = 0.15 + risk*.35;
+      cx.save(); cx.translate(x,y); cx.rotate(a);
+
+      // La forma intrusa replica la gramática visual del dominante actual
+      // pero en el color del evento de mañana
+      if(DOM==='temperatura'){
+        // Arcos incompletos — como círculos que aún no terminaron de formarse
+        cx.beginPath();
+        cx.arc(0,0,sz*(.6+SR()*.6), rnd(0,TAU), rnd(Math.PI*.4,TAU));
+        cx.strokeStyle=rc(alpha*1.4); cx.lineWidth=1.2+risk; cx.stroke();
+      } else if(DOM==='viento'){
+        // Trazos fragmentados en la dirección del viento, pero temblorosos
+        const len=sz*3;
+        cx.beginPath(); cx.moveTo(-len*.5,0);
+        cx.quadraticCurveTo(rnd(-sz,sz)*risk, rnd(-sz,sz), len*.5, rnd(-sz*.3,sz*.3));
+        cx.strokeStyle=rc(alpha*1.2); cx.lineWidth=.8+risk*.6; cx.stroke();
+      } else if(DOM==='humedad'){
+        // Elipses que parecen evaporarse — transparentes y distorsionadas
+        cx.beginPath();
+        cx.ellipse(0,0,sz*(1+SR()*.5),sz*(.3+SR()*.4),0,0,TAU);
+        cx.strokeStyle=rc(alpha); cx.lineWidth=.7; cx.stroke();
+        cx.fillStyle=rc(alpha*.35); cx.fill();
+      } else if(DOM==='presion'){
+        // Rectángulos inclinados que rompen la horizontalidad
+        const w=sz*3, h2=sz*.4;
+        cx.fillStyle=rc(alpha*.8);
+        cx.fillRect(-w/2,-h2/2,w,h2);
+      } else if(DOM==='nubes'){
+        // Rombos pequeños descentrados, como nubes que adelantan
+        cx.beginPath();
+        cx.moveTo(0,-sz); cx.lineTo(sz*.7,0); cx.lineTo(0,sz*.7); cx.lineTo(-sz*.6,0);
+        cx.closePath();
+        cx.fillStyle=rc(alpha*.9); cx.fill();
+      } else {
+        // PM: puntos-fractura dispersos
+        cx.beginPath(); cx.arc(0,0,sz*.4,0,TAU);
+        cx.fillStyle=rc(alpha*1.5); cx.fill();
+      }
+      cx.restore();
+    }
+  }
+
+  // ── 3. INVASIÓN DESDE LOS BORDES ───────────────────────────────────────
+  // Cuanto más riesgo, más penetran las formas de alerta hacia el interior.
+  // Riesgo medio: solo punta de los bordes. Riesgo alto: invaden el centro.
+  const nEdge = Math.floor(risk * 22);
+  const penetracion = risk * 90; // px de penetración interior
+  for(let i=0; i<nEdge; i++){
+    const edge = i%4;
+    let x, y, rotBase;
+    if     (edge===0){x=rnd(W*.04,W*.96); y=rnd(4,penetracion);       rotBase=0;}
+    else if(edge===1){x=rnd(W-penetracion,W-4); y=rnd(H*.04,H*.96);   rotBase=Math.PI*.5;}
+    else if(edge===2){x=rnd(W*.04,W*.96); y=rnd(H-penetracion,H-4);   rotBase=Math.PI;}
+    else             {x=rnd(4,penetracion); y=rnd(H*.04,H*.96);        rotBase=Math.PI*1.5;}
+    const sz = 5 + risk*18 + rnd(0,8);
+    const alpha = 0.28 + risk*.42;
+    cx.save(); cx.translate(x,y); cx.rotate(rotBase + rnd(-.3,.3));
+    cx.beginPath();
+    cx.moveTo(0,-sz); cx.lineTo(sz*.85,sz*.55); cx.lineTo(-sz*.85,sz*.55);
+    cx.closePath();
+    cx.fillStyle = rc(alpha); cx.fill();
+    // Segundo triángulo interior si riesgo alto — tensión acumulada
+    if(risk>.6 && SR()>.5){
+      cx.beginPath();
+      cx.moveTo(0,-sz*.5); cx.lineTo(sz*.45,sz*.3); cx.lineTo(-sz*.45,sz*.3);
+      cx.closePath();
+      cx.fillStyle = rc(alpha*1.3); cx.fill();
+    }
+    cx.restore();
+  }
+
+  // ── 4. MARCO DE TENSIÓN CRÍTICA ─────────────────────────────────────────
+  // Solo visible con riesgo muy alto (>75%) — el cuadro "avisa" que mañana
+  // la situación cambia radicalmente. Marco interior pulsante del color evento.
+  if(risk > .75){
+    const m = 8;
+    // Marco doble: exterior tenue, interior sólido
+    cx.strokeStyle = rc(0.18);
+    cx.lineWidth = 8 + risk*6;
+    cx.strokeRect(m,m,W-m*2,H-m*2);
+    cx.strokeStyle = rc(0.45);
+    cx.lineWidth = 1.5;
+    cx.strokeRect(m+6,m+6,W-m*2-12,H-m*2-12);
+  }
+
+  // ── 5. INTERFERENCIA EN EL FONDO si riesgo muy alto (>85%) ─────────────
+  // El gradiente del fondo se "contamina" con focos del color de mañana.
+  if(risk > .85) {
+    const nFocos = ri(2,4);
+    for(let i=0;i<nFocos;i++){
+      const fx=rnd(W*.1,W*.9), fy=rnd(H*.1,H*.9);
+      const fr=rnd(80,200);
+      const fg=cx.createRadialGradient(fx,fy,0,fx,fy,fr);
+      fg.addColorStop(0, rc(risk*.22));
+      fg.addColorStop(1, 'rgba(0,0,0,0)');
+      cx.fillStyle=fg; cx.fillRect(0,0,W,H);
+    }
+  }
+}
+
+// ── Ruido de superficie — imperfecciones globales ─────────────────────────
+function addNoise(){
+  // Ruido fino que añade textura al paper
+  const img=cx.getImageData(0,0,W,H);
+  const d=img.data;
+  const noiseAmt=DOM==='pm25' ? 8+C.pm_norm*12 : 3;
+  for(let i=0;i<d.length;i+=4){
+    const n2=(SR()-.5)*noiseAmt;
+    d[i]=Math.min(255,Math.max(0,d[i]+n2));
+    d[i+1]=Math.min(255,Math.max(0,d[i+1]+n2));
+    d[i+2]=Math.min(255,Math.max(0,d[i+2]+n2));
+  }
+  cx.putImageData(img,0,0);
+}
+
+// ── RENDER — orden de capas según dominante ───────────────────────────────
+function render(){
+  // El dominante se dibuja encima o abajo según conviene
+  drawFondo();
+
+  // Orden de capas: el dominante casi siempre al final (encima)
+  const order=['presion','nubes','viento','humedad','pm25','temperatura'];
+  // Mueve el dominante al final
+  const idx=order.indexOf(DOM);
+  if(idx>-1){order.splice(idx,1);order.push(DOM);}
+
+  const drawFns={
+    presion:     drawPresion,
+    nubes:       drawNubes,
+    viento:      drawViento,
+    humedad:     drawHumedad,
+    pm25:        drawPM,
+    temperatura: drawTemperatura,
+  };
+  for(const k of order) drawFns[k]();
+  drawML();
+  addNoise();
+}
+
+render();
+
+// ── UI ────────────────────────────────────────────────────────────────────
+const domLabels={
+  temperatura:'TEMPERATURA DOMINA',
+  viento:     'VIENTO DOMINA',
+  humedad:    'HUMEDAD DOMINA',
+  presion:    'PRESIÓN DOMINA',
+  nubes:      'NUBES DOMINAN',
+  pm25:       'CONTAMINACIÓN DOMINA',
+};
+const domColors={
+  temperatura:'#e06020',viento:'#3a80c0',humedad:'#3a9060',
+  presion:'#c09040',nubes:'#7090a0',pm25:'#9060a0',
+};
+document.getElementById('dominant-label').textContent=domLabels[DOM];
+document.getElementById('dominant-label').style.color=domColors[DOM];
+document.getElementById('dateline').textContent=
+  `${C.temp_c.toFixed(1)}°C · ${C.pressure} hPa · ${C.wind_speed.toFixed(1)}m/s · PM${C.pm25.toFixed(0)} · HR${C.humidity}%`;
+document.getElementById('edition').textContent=
+  `${C.date} · ${C.hour}h · ${C.city.toUpperCase()}`;
+
+// Dom bars
+const VARLABELS=[
+  ['temperatura',C.temp_norm,`${C.temp_c.toFixed(1)}°C`,P.tempC(1)],
+  ['viento',C.wind_energy,`${C.wind_speed.toFixed(1)}m/s`,P.windC(1)],
+  ['humedad',C.humidity_norm,`HR${C.humidity}%`,P.humC(1)],
+  ['presion',C.pressure_norm,`${C.pressure}hPa`,P.presC(1)],
+  ['nubes',C.cloud_norm,`${C.clouds}%`,P.cloudC(1)],
+  ['pm25',C.pm_norm,`PM${C.pm25.toFixed(0)}`,P.pmC(1)],
+];
+document.getElementById('dom-title').textContent=`VARIABLE DOMINANTE: ${domLabels[DOM].replace(' DOMINA','').replace(' DOMINAN','')}`;
+document.getElementById('dom-title').style.color=domColors[DOM];
+let barsHtml='';
+for(const[k,v,label,col]of VARLABELS){
+  const pct=(v*100).toFixed(0);
+  const isd=k===DOM;
+  barsHtml+=`<div style="margin-bottom:6px;">
+    <div style="display:flex;justify-content:space-between;font-size:7px;color:${isd?col:'#666'};letter-spacing:.1em;margin-bottom:2px;">
+      <span>${isd?'▶ ':''}${k.toUpperCase()}</span>
+      <span class="val">${label} · ${pct}%</span>
+    </div>
+    <div class="dom-bar"><div class="dom-fill" style="width:${pct}%;background:${col};opacity:${isd?1:.4};"></div></div>
+  </div>`;
+}
+document.getElementById('dom-bars').innerHTML=barsHtml;
+
+// Leyenda
+const legRows=[
+  ['●','temperatura',`${C.temp_c.toFixed(1)}°C`,`Círculos concéntricos. Color fijo por temperatura. ${DOM==='temperatura'?'DOMINANTE — invaden el canvas, se solapan.':'Tamaño y anillos proporcionales al calor.'}`,P.tempC(1)],
+  ['—','viento',`${C.wind_speed.toFixed(1)} m/s ${C.wind_dir}`,`Curvas. ${C.wind_energy<.25?'Calma: cortas y suaves.':C.wind_energy<.55?'Moderado: líneas medianas.':'Fuerte: atraviesan el canvas entero.'} ${DOM==='viento'?'DOMINANTE — rota la composición global.':''}`,P.windC(1)],
+  ['△','humedad',`HR ${C.humidity}%`,`${C.humidity_norm<.4?'Triángulos nítidos.':'Elipses blandas y difusas.'} ${DOM==='humedad'?'DOMINANTE — bordes desenfocados, expansión de formas.':''}`,P.humC(1)],
+  ['▭','presión',`${C.pressure} hPa`,`Rectángulos. ${C.pressure_norm<.4?'Ligeros y libres.':C.pressure_norm<.65?'Moderados.':'Bandas rígidas horizontales, composición arquitectónica.'} ${DOM==='presion'?'DOMINANTE.':''}`,P.presC(1)],
+  ['◆','nubes',`${C.clouds}%`,`Rombos. ${C.cloud_norm<.2?'Pocos, dispersos.':C.cloud_norm<.55?'Medianos.':'Densos, aplastados, peso en la parte superior.'} ${DOM==='nubes'?'DOMINANTE.':''}`,P.cloudC(1)],
+  ['·','PM2.5',`${C.pm25.toFixed(1)} µg/m³`,`Partículas. ${C.pm_norm<.15?'Limpias, casi invisibles.':C.pm_norm<.4?'Visibles.':'Enturbian todas las capas — veladura fuerte.'} ${DOM==='pm25'?'DOMINANTE — contamina el cuadro entero.':''}`,P.pmC(1)],
+];
+let legHtml = legRows.map(([sym,_k,val,desc,col])=>`
+  <div class="leg-row">
+    <span class="leg-sym" style="color:${col}">${sym}</span>
+    <div class="leg-txt"><strong>${val}</strong> — ${desc}</div>
+  </div>`).join('');
+
+// ── Sección ML ─────────────────────────────────────────────────────────────
+if(C.ml_ready) {
+  const risk=C.risk_score;
+  const pct=(risk*100).toFixed(0);
+  const evtNames={heat:'CALOR EXTREMO',cold:'FRÍO INTENSO',rain:'LLUVIA INTENSA',wind:'VIENTO FUERTE'};
+  const evtEs=evtNames[C.event_type]||'EVENTO GENÉRICO';
+  const rColors={heat:'#d05020',cold:'#3060b0',rain:'#3070a0',wind:'#309060'};
+  const rCol=rColors[C.event_type]||'#a08030';
+
+  const nivelTxt = risk<.06  ? 'SIN PRESENCIA — cuadro sin señal de mañana'
+                 : risk<.25  ? 'BAJA — fractura leve, casi invisible'
+                 : risk<.50  ? 'MEDIA — intrusiones en el lenguaje del dominante + bordes'
+                 : risk<.75  ? 'ALTA — formas de alerta invaden el interior, tensión visible'
+                 :             'CRÍTICA — marco de tensión + el cuadro entero se tiñe';
+
+  const presenciaTxt = risk<.06 ? 'No hay señal visual de riesgo mañana.'
+    : `El evento previsto para mañana (<strong style="color:${rCol}">${evtEs}</strong>) ya presiona el cuadro de hoy. `
+    + `Las formas intrusas replican el idioma del dominante actual (<strong>${domLabels[DOM]}</strong>) `
+    + `pero en el color del evento futuro — como si mañana ya coexistiera con el presente.`;
+
+  legHtml += `
+  <div style="margin-top:20px;border-top:1px solid #2a2a2a;padding-top:16px;">
+    <div style="font-size:7px;color:${rCol};letter-spacing:.28em;text-transform:uppercase;margin-bottom:10px;">
+      ◈ predicción ML — riesgo meteorológico mañana
+    </div>
+    <div style="font-size:8px;color:#888;line-height:1.8;margin-bottom:10px;">${presenciaTxt}</div>
+    <div style="display:flex;justify-content:space-between;font-size:7px;color:#444;letter-spacing:.1em;margin-bottom:3px;">
+      <span>0% sin señal</span><span>100% crítico</span>
+    </div>
+    <div style="height:3px;background:#2a2a2a;margin-bottom:4px;">
+      <div style="height:100%;width:${pct}%;background:${rCol};"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;">
+      <div style="font-size:9px;color:${rCol};letter-spacing:.1em;">${pct}% · ${nivelTxt}</div>
+    </div>
+    ${risk>=.06 ? `
+    <div style="margin-top:10px;font-size:7px;color:#555;line-height:1.9;letter-spacing:.06em;">
+      <div>· <strong style="color:#666;">Tensión de fondo</strong> — ${risk>.20?'veladura '+rCol+' proporcional al riesgo':'ausente (<20%)'}</div>
+      <div>· <strong style="color:#666;">Fracturas en dominante</strong> — ${risk>.25?Math.floor(risk*14)+' formas intrusas en color de mañana':'ausentes (<25%)'}</div>
+      <div>· <strong style="color:#666;">Invasión de bordes</strong> — ${Math.floor(risk*22)+' triángulos, penetración '+Math.round(risk*90)+'px'}</div>
+      <div>· <strong style="color:#666;">Marco de tensión crítica</strong> — ${risk>.75?'visible (riesgo >75%)':'ausente'}</div>
+      <div>· <strong style="color:#666;">Interferencia en fondo</strong> — ${risk>.85?'activa — focos del color de mañana':'ausente'}</div>
+    </div>` : ''}
+  </div>`;
+} else {
+  legHtml += `
+  <div style="margin-top:20px;border-top:1px solid #2a2a2a;padding-top:14px;">
+    <div style="font-size:7px;color:#444;letter-spacing:.28em;">◈ predicción ML — no disponible</div>
+  </div>`;
+}
+
+document.getElementById('leg-content').innerHTML=legHtml;
+
+// ── Guardar PNG ───────────────────────────────────────────────────────────
+function saveImg(){
+  const st=document.getElementById('status');
+  st.textContent='preparando...';
+  setTimeout(()=>{
+    try{
+      const t2=document.createElement('canvas');
+      t2.width=cv.width; t2.height=cv.height;
+      const tc=t2.getContext('2d');
+      tc.fillStyle=P.paper; tc.fillRect(0,0,t2.width,t2.height);
+      tc.drawImage(cv,0,0);
+      t2.toBlob(blob=>{
+        if(!blob){st.textContent='error';return;}
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        a.download=`atmospherica_${C.city}_${C.date}_${C.hour}h.png`;
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+        setTimeout(()=>URL.revokeObjectURL(url),2000);
+        st.textContent='guardado ✓';
+      },'image/png');
+    }catch(e){st.textContent='error: '+e.message;}
+  },80);
+}
+</script>
+</body>
+</html>

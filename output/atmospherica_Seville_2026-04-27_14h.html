@@ -1,17 +1,8 @@
-"""
-ATMOSPHERICA v2 — Motor de dominancia climática
-El clima NO se visualiza, el clima MANDA.
-Una variable domina y deforma todo el sistema visual.
-"""
-
-import json, os, math, webbrowser
-from datetime import datetime
-
-HTML_TEMPLATE = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>ATMOSPHERICA · __CITY__</title>
+<title>ATMOSPHERICA · Seville</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   body{
@@ -85,7 +76,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 <div id="header">
-  <div id="city">ATMOSPHERICA · __CITY_UPPER__</div>
+  <div id="city">ATMOSPHERICA · SEVILLE</div>
   <div id="dominant-label" id="dom-lbl">—</div>
   <div id="dateline"></div>
 </div>
@@ -104,7 +95,31 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </div>
 
 <script>
-const C = __CLIMATE_JSON__;
+const C = {
+  "city": "Seville",
+  "date": "2026-04-27",
+  "hour": 14,
+  "temp_c": 26.02,
+  "pressure": 1012,
+  "wind_speed": 6.69,
+  "wind_dir": "E",
+  "wind_dx": 1.0,
+  "wind_dy": -0.0,
+  "pm25": 5.08,
+  "humidity": 48,
+  "clouds": 0,
+  "temp_norm": 0.566,
+  "pressure_norm": 0.685,
+  "wind_energy": 0.335,
+  "pm_norm": 0.068,
+  "humidity_norm": 0.438,
+  "cloud_norm": 0.0,
+  "dominant": "presion",
+  "dominant_strength": 0.685,
+  "risk_score": 0.148,
+  "event_type": "wind",
+  "ml_ready": true
+};
 
 // ── RNG seeded ────────────────────────────────────────────────────────────
 function seededRng(seed){
@@ -871,100 +886,4 @@ function saveImg(){
 }
 </script>
 </body>
-</html>"""
-
-
-def _wind_label(deg):
-    dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO']
-    return dirs[int((deg + 11.25) / 22.5) % 16]
-
-
-def _compute_dominant(params):
-    scores = {
-        'temperatura': params['temperature_norm'],
-        'viento':      params['wind_energy'],
-        'humedad':     params['veil_opacity'] / 80.0,
-        'presion':     params['density'],
-        'nubes':       params['raw'].get('clouds', 15) / 100.0,
-        'pm25':        params['fragmentation'],
-    }
-    dominant = max(scores, key=scores.get)
-    return dominant, scores[dominant], scores
-
-
-def generate_html(visual_params: dict, output_dir: str = "output") -> str:
-    os.makedirs(output_dir, exist_ok=True)
-    data  = visual_params["raw"]
-    now   = datetime.now()
-    date  = now.strftime("%Y-%m-%d")
-    hour  = now.hour
-    city  = data["city"]
-
-    t     = visual_params["temperature_norm"]
-    we    = visual_params["wind_energy"]
-    hum   = visual_params["veil_opacity"] / 80.0
-    pnorm = visual_params["density"]
-    pm    = visual_params["fragmentation"]
-    cld   = data.get("clouds", 15) / 100.0
-
-    dominant, dom_strength, scores = _compute_dominant(visual_params)
-    risk_score = visual_params.get("risk_score", 0.0)
-    event_type = visual_params.get("event_type", "none")
-    ml_ready   = visual_params.get("ml_ready", False)
-
-    climate_data = {
-        "city": city, "date": date, "hour": hour,
-        "temp_c": data["temperature"], "pressure": data["pressure"],
-        "wind_speed": data["wind_speed"], "wind_dir": _wind_label(data["wind_deg"]),
-        "wind_dx": round(visual_params["wind_dx"], 3),
-        "wind_dy": round(visual_params["wind_dy"], 3),
-        "pm25": data["pm2_5"], "humidity": data["humidity"],
-        "clouds": data.get("clouds", 15),
-        "temp_norm": round(t, 3), "pressure_norm": round(pnorm, 3),
-        "wind_energy": round(we, 3), "pm_norm": round(pm, 3),
-        "humidity_norm": round(hum, 3), "cloud_norm": round(cld, 3),
-        "dominant": dominant, "dominant_strength": round(dom_strength, 3),
-        "risk_score": round(risk_score, 3),
-        "event_type": event_type, "ml_ready": ml_ready,
-    }
-
-    print(f"\n  Ciudad       : {city}")
-    print(f"  Fecha        : {date}  Hora: {hour}h")
-    print(f"  DOMINANTE    : {dominant.upper()} ({dom_strength:.1%})")
-    print(f"  Temperatura  : {data['temperature']:.1f}°C  (norm {t:.2f})")
-    print(f"  Viento       : {data['wind_speed']:.1f} m/s  (energía {we:.2f})")
-    print(f"  Humedad      : {data['humidity']}%  (norm {hum:.2f})")
-    print(f"  Presión      : {data['pressure']} hPa  (norm {pnorm:.2f})")
-    print(f"  Nubes        : {data.get('clouds', 15)}%  (norm {cld:.2f})")
-    print(f"  PM2.5        : {data['pm2_5']:.1f} µg/m³  (norm {pm:.2f})")
-    print(f"  ML riesgo    : {risk_score:.1%}  evento: {event_type}")
-
-    # ── Sustitución segura: sin .format(), sin conflictos de llaves ──────
-    html = HTML_TEMPLATE
-    html = html.replace("__CITY__", city)
-    html = html.replace("__CITY_UPPER__", city.upper())
-    html = html.replace("__CLIMATE_JSON__",
-                        json.dumps(climate_data, indent=2, ensure_ascii=False))
-
-    fname = f"atmospherica_{city.replace(' ', '_')}_{date}_{hour:02d}h.html"
-    path  = os.path.join(output_dir, fname)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(html)
-    print(f"\n  HTML         : {path}")
-    return path
-
-
-if __name__ == "__main__":
-    params = {
-        "raw": {
-            "city": "Sevilla", "temperature": 24.5, "pressure": 1012,
-            "wind_speed": 5.8, "wind_deg": 270, "pm2_5": 14.2,
-            "humidity": 45, "clouds": 35,
-        },
-        "temperature_norm": 0.65, "density": 0.58, "wind_energy": 0.52,
-        "wind_dx": -1.0, "wind_dy": 0.0,
-        "fragmentation": 0.18, "veil_opacity": 36.0,
-        "risk_score": 0.42, "event_type": "wind", "ml_ready": True,
-    }
-    path = generate_html(params, output_dir="output")
-    webbrowser.open(f"file://{os.path.abspath(path)}")
+</html>

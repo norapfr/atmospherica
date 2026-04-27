@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ATMOSPHERICA · Seville</title>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box;}}
+  body{{
+    background:#18160f;
+    font-family:'Courier New',monospace;
+    display:flex;flex-direction:column;align-items:center;
+    padding:20px 16px 36px;min-height:100vh;
+  }}
+  #header{{
+    width:100%;max-width:900px;
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:14px;padding-bottom:10px;
+    border-bottom:1px solid #2c2920;
+  }}
+  #city{{font-size:9px;color:#776655;letter-spacing:.32em;text-transform:uppercase;}}
+  #dateline{{font-size:8px;color:#4a4030;letter-spacing:.1em;}}
+  #dom-tag{{
+    font-size:7px;letter-spacing:.3em;text-transform:uppercase;
+    padding:3px 10px;border:1px solid currentColor;
+    margin:0 auto 0 16px;
+  }}
+  #canvas-wrap{{width:100%;max-width:900px;}}
+  canvas{{display:block;width:100%;height:auto;}}
+  #legend{{width:100%;max-width:900px;margin-top:24px;}}
+
+  .var-block{{display:flex;gap:0;margin-bottom:2px;border-left:2px solid transparent;padding-left:10px;}}
+  .var-block.dominant{{border-left-color:currentColor;}}
+  .var-rank{{font-size:8px;color:#333;width:14px;flex-shrink:0;margin-top:1px;}}
+  .var-main{{flex:1;}}
+  .var-header{{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;}}
+  .var-name{{font-size:7.5px;letter-spacing:.2em;text-transform:uppercase;font-weight:normal;}}
+  .var-val{{font-size:7px;color:#555;letter-spacing:.08em;}}
+  .var-bar-wrap{{height:2px;background:#1e1c16;margin-bottom:4px;}}
+  .var-bar{{height:100%;}}
+  .var-desc{{font-size:7px;color:#4a4535;letter-spacing:.04em;line-height:1.7;}}
+  .var-desc.visible{{color:#6a6050;}}
+  .var-desc.dominant-desc{{color:#8a7a60;}}
+
+  #footer{{width:100%;max-width:900px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;}}
+  #edition{{font-size:7px;color:#333;letter-spacing:.2em;}}
+  #save{{padding:5px 16px;background:transparent;border:1px solid #2c2920;color:#4a4030;
+    font-family:monospace;font-size:7px;letter-spacing:.18em;cursor:pointer;transition:.2s;}}
+  #save:hover{{border-color:#666;color:#aaa;}}
+  #status{{font-size:7px;color:#333;margin-top:3px;text-align:right;min-height:12px;}}
+</style>
+</head>
+<body>
+<div id="header">
+  <div id="city">ATMOSPHERICA · SEVILLE</div>
+  <div id="dom-tag">—</div>
+  <div id="dateline"></div>
+</div>
+<div id="canvas-wrap"><canvas id="c" width="900" height="1080"></canvas></div>
+<div id="legend">
+  <div id="var-list"></div>
+  <div id="ml-section"></div>
+</div>
+<div id="footer">
+  <div id="edition"></div>
+  <div><button id="save" onclick="saveImg()">GUARDAR PNG</button><div id="status"></div></div>
+</div>
+
+<script>
+const C = {
+  "city": "Seville",
+  "date": "2026-04-26",
+  "hour": 21,
+  "temp_c": 24.06,
+  "pressure": 1014,
+  "wind_speed": 3.09,
+  "wind_dir": "E",
+  "wind_dx": 0.985,
+  "wind_dy": 0.174,
+  "pm25": 4.19,
+  "humidity": 50,
+  "clouds": 0,
+  "temp_norm": 0.523,
+  "pressure_norm": 0.72,
+  "wind_energy": 0.154,
+  "pm_norm": 0.056,
+  "humidity_norm": 0.463,
+  "cloud_norm": 0.0,
+  "dominant": "presion",
+  "dominant_strength": 0.72,
+  "risk_score": 0.049,
+  "event_type": "none",
+  "ml_ready": true
+};
+</script>
+</body>
+</html>

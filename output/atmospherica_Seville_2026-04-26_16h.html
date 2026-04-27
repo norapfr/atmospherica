@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ATMOSPHERICA · Seville</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#06060a;
+    font-family:'Courier New', monospace;
+    display:flex; flex-direction:column;
+    align-items:center;
+    padding:20px 16px 28px;
+    min-height:100vh;
+  }
+  #header {
+    width:100%; max-width:860px;
+    display:flex; justify-content:space-between; align-items:flex-end;
+    margin-bottom:14px;
+    border-bottom:1px solid #1a1a1a;
+    padding-bottom:10px;
+  }
+  #city     { font-size:10px; color:#4a4840; letter-spacing:.22em; }
+  #dateline { font-size:9px;  color:#302e2a; letter-spacing:.12em; }
+  #canvas-wrap { width:100%; max-width:860px; }
+  canvas { display:block; width:100%; height:auto; }
+  #legend {
+    width:100%; max-width:860px; margin-top:16px;
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+    gap:8px 18px;
+  }
+  .leg { display:flex; gap:8px; align-items:flex-start; }
+  .swatch { width:10px; height:10px; flex-shrink:0; margin-top:2px; }
+  .ltext  { font-size:8.5px; color:#333; letter-spacing:.05em; line-height:1.6; }
+  .ltext strong { color:#4a4840; font-weight:normal; display:block; }
+  #save {
+    margin-top:14px; padding:6px 22px;
+    background:transparent; border:1px solid #1e1c18;
+    color:#333028; font-family:monospace; font-size:8.5px;
+    letter-spacing:.16em; cursor:pointer; transition:.2s;
+  }
+  #save:hover { border-color:#666; color:#999; }
+  #status { font-size:8px; color:#1e1c18; letter-spacing:.1em; margin-top:6px; min-height:12px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="city"></div>
+  <div id="dateline"></div>
+</div>
+<div id="canvas-wrap">
+  <canvas id="c" width="860" height="1000"></canvas>
+</div>
+<div id="legend"></div>
+<button id="save" onclick="saveImg()">GUARDAR PNG</button>
+<div id="status"></div>
+
+<script>
+const C = {
+  "city": "Seville",
+  "date": "2026-04-26",
+  "hour": 16,
+  "temp_c": 26.46,
+  "pressure": 1013,
+  "wind_speed": 6.69,
+  "wind_dir": "ESE",
+  "wind_dx": 0.94,
+  "wind_dy": 0.342,
+  "pm25": 3.82,
+  "humidity": 43,
+  "clouds": 0,
+  "temp_norm": 0.575,
+  "pressure_norm": 0.702,
+  "wind_energy": 0.335,
+  "pm_norm": 0.051,
+  "humidity_norm": 0.388,
+  "cloud_norm": 0.0,
+  "day_type": "stable",
+  "risk_score": 0.143,
+  "event_type": "wind",
+  "ml_ready": true
+};
+
+// ── Seeded RNG ──────────────────────────────────────────────────────────────
+function seededRng(seed) {
+  let s = seed >>> 0;
+  return function() {
+    s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+    return (s >>> 0) / 4294967296;
+  };
+}
+const dateStr = C.date.replace(/-/g,'') + C.hour;
+let seedVal = 0;
+for (let i=0;i<dateStr.length;i++) seedVal=(seedVal*31+dateStr.charCodeAt(i))|0;
+for (let i=0;i<C.city.length;i++)  seedVal=(seedVal*31+C.city.charCodeAt(i))|0;
+const SR = seededRng(Math.abs(seedVal)||12345);
+
+function rnd(a,b)    { return a+SR()*(b-a); }
+function rndInt(a,b) { return Math.floor(rnd(a,b+1)); }
+function rndPick(arr){ return arr[Math.floor(SR()*arr.length)]; }
+
+// ── Paleta ──────────────────────────────────────────────────────────────────
+function buildPalette() {
+  const t=C.temp_norm, hour=C.hour, cld=C.cloud_norm;
+  let timeHue,timeSat,timeBri;
+  if      (hour<5)  {timeHue=230;timeSat=45;timeBri=12;}
+  else if (hour<8)  {timeHue=25; timeSat=55;timeBri=35;}
+  else if (hour<11) {timeHue=38; timeSat=52;timeBri=78;}
+  else if (hour<15) {timeHue=42; timeSat=45;timeBri=92;}
+  else if (hour<19) {timeHue=28; timeSat=68;timeBri=76;}
+  else if (hour<22) {timeHue=18; timeSat=58;timeBri=42;}
+  else              {timeHue=225;timeSat=42;timeBri=18;}
+  const tempShift=(t-0.5)*25;
+  const finalHue=(timeHue+tempShift+360)%360;
+  const finalSat=Math.min(100,timeSat+t*32);
+  const finalBri=Math.max(8,timeBri-cld*18);
+  const cd=cld*0.28;
+  return {
+    primary:   [finalHue,               finalSat*(1-cd),             finalBri],
+    complement:[(finalHue+148+t*28)%360,finalSat*0.75*(1-cd),        finalBri*0.80],
+    accent:    [(finalHue+215+t*18)%360,Math.min(100,finalSat*1.35), Math.min(100,finalBri*1.22)],
+    dark:      [finalHue,               finalSat*0.40*(1-cd),         Math.max(5,finalBri*0.14)],
+    neutral:   [(finalHue+28)%360,      20,                           Math.min(100,finalBri*0.65)],
+    bg:        [timeHue,                timeSat*0.11,                 Math.max(4,timeBri*0.09-cld*3)],
+    highlight: [(finalHue-22+360)%360,  Math.min(100,finalSat*0.95), Math.min(100,finalBri*1.28)],
+  };
+}
+
+function hsb2rgb(h,s,b) {
+  h/=360;s/=100;b/=100;
+  const i=Math.floor(h*6),f=h*6-i;
+  const p=b*(1-s),q=b*(1-s*f),t2=b*(1-s*(1-f));
+  let r,g,bv;
+  switch(i%6){
+    case 0:r=b;g=t2;bv=p;break; case 1:r=q;g=b;bv=p;break;
+    case 2:r=p;g=b;bv=t2;break; case 3:r=p;g=q;bv=b;break;
+    case 4:r=t2;g=p;bv=b;break; default:r=b;g=p;bv=q;
+  }
+  return [Math.round(r*255),Math.round(g*255),Math.round(bv*255)];
+}
+function hsba(hsb,a=1){ const[r,g,b]=hsb2rgb(...hsb); return `rgba(${r},${g},${b},${a})`; }
+function hexStr(hsb)  { const[r,g,b]=hsb2rgb(...hsb); return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); }
+
+// ── Composición ─────────────────────────────────────────────────────────────
+//
+// PRINCIPIO: el clima determina cuántos círculos hay y su tamaño.
+// Las posiciones se eligen de una cuadrícula que cubre TODO el canvas
+// incluyendo el centro. El anti-solapamiento empuja los candidatos
+// hasta encontrar un hueco, nunca obliga a poner nada en ningún sitio.
+//
+function generateComposition() {
+  const W=860, H=1000;
+  const t=C.temp_norm;
+
+  // Número de círculos según temperatura
+  const nCircles = rndInt(t>0.6 ? 4 : 3, t>0.6 ? 7 : 5);
+
+  // Cuadrícula uniforme de candidatos que cubre TODO el canvas
+  // (incluyendo el centro) — el clima elige de aquí
+  const candidates = [];
+  const cols=5, rows=6;
+  for (let ci=0;ci<cols;ci++) for (let ri=0;ri<rows;ri++) {
+    // Centro de cada celda + ruido aleatorio dentro de la celda
+    const cellW=W/cols, cellH=H/rows;
+    const cx2=cellW*(ci+0.2)+rnd(0,cellW*0.6);
+    const cy2=cellH*(ri+0.2)+rnd(0,cellH*0.6);
+    // Descartamos el borde más extremo
+    if (cx2<W*0.05||cx2>W*0.95||cy2<H*0.04||cy2>H*0.96) continue;
+    candidates.push([cx2,cy2]);
+  }
+  // Mezcla con semilla
+  candidates.sort(()=>SR()-0.5);
+
+  // Anti-solapamiento: por cada círculo elegido, comprobamos que no
+  // solape con los ya colocados. Si solapa, intentamos el siguiente candidato.
+  const placed = [];
+  const palOptions=['primary','complement','accent','dark','neutral','highlight'];
+
+  for (let i=0;i<candidates.length && placed.length<nCircles;i++) {
+    const [cx2,cy2] = candidates[i];
+    // Escala: varía con temperatura y orden de colocación
+    const baseScale = (0.40 + SR()*0.60) * (1.0 + t*0.35);
+    const R = 115 * baseScale;
+
+    // ¿Solapa con alguno ya colocado?
+    let overlaps = false;
+    for (const p of placed) {
+      const dist = Math.hypot(cx2-p.x, cy2-p.y);
+      const minDist = R + p.R + 18; // margen de separación
+      if (dist < minDist) { overlaps=true; break; }
+    }
+    if (overlaps) continue;
+
+    const nRings = rndInt(4,7);
+    const ringPals = ['dark'];
+    for (let r=1;r<nRings;r++) ringPals.push(rndPick(palOptions));
+
+    placed.push({
+      x:cx2, y:cy2, scale:baseScale, R,
+      nRings, ringPals,
+      arc1start:rnd(0,Math.PI*2), arc1span:rnd(Math.PI*0.4,Math.PI*0.85),
+      arc2start:rnd(0,Math.PI*2), arc2span:rnd(Math.PI*0.3,Math.PI*0.75),
+    });
+  }
+
+  // Densidad de viento
+  const windDensity   = rnd(0.7, 1.4);
+  const windLengthMod = rnd(0.8, 1.3);
+
+  // Triángulos de humedad — shuffleados por día
+  const triPositions = [
+    [W*0.05,H*0.22],[W*0.95,H*0.32],[W*0.07,H*0.70],
+    [W*0.93,H*0.66],[W*0.28,H*0.97],[W*0.72,H*0.03],
+    [W*0.14,H*0.50],[W*0.86,H*0.50],[W*0.50,H*0.97],
+    [W*0.02,H*0.08],[W*0.98,H*0.90],[W*0.50,H*0.02],
+    [W*0.85,H*0.15],[W*0.15,H*0.85],
+  ].sort(()=>SR()-0.5);
+
+  // Fuente de luz según hora
+  let baseGx,baseGy;
+  if      (C.hour>=6  && C.hour<10) {baseGx=0.18;baseGy=0.82;}
+  else if (C.hour>=10 && C.hour<13) {baseGx=0.38;baseGy=0.12;}
+  else if (C.hour>=13 && C.hour<17) {baseGx=0.72;baseGy=0.10;}
+  else if (C.hour>=17 && C.hour<20) {baseGx=0.88;baseGy=0.52;}
+  else                              {baseGx=0.50;baseGy=0.50;}
+  const lightX=baseGx+rnd(-0.10,0.10);
+  const lightY=baseGy+rnd(-0.08,0.08);
+
+  return {circles:placed, windDensity, windLengthMod, triPositions, lightX, lightY};
+}
+
+// ── Setup ────────────────────────────────────────────────────────────────────
+const W=860, H=1000;
+const cv=document.getElementById('c');
+const cx=cv.getContext('2d');
+const PAL  = buildPalette();
+const COMP = generateComposition();
+
+// ── Fondo ────────────────────────────────────────────────────────────────────
+function drawBg() {
+  const[bh,bs,bb]=PAL.bg;
+  const[ph,ps,pb]=PAL.primary;
+  const[ch,cs,cb]=PAL.complement;
+  cx.fillStyle=hsba([bh,bs*0.12,bb*0.5]);
+  cx.fillRect(0,0,W,H);
+  const gx=W*COMP.lightX, gy=H*COMP.lightY;
+  const g1=cx.createRadialGradient(gx,gy,0,gx,gy,W*0.9);
+  g1.addColorStop(0,hsba([ph,ps*0.40,pb*1.0],0.28));
+  g1.addColorStop(0.4,hsba([ph,ps*0.20,pb*0.6],0.13));
+  g1.addColorStop(1,'rgba(0,0,0,0)');
+  cx.fillStyle=g1; cx.fillRect(0,0,W,H);
+  const g2=cx.createRadialGradient(W-gx,H-gy,0,W-gx,H-gy,W*0.6);
+  g2.addColorStop(0,hsba([ch,cs*0.30,cb*0.85],0.16));
+  g2.addColorStop(0.5,hsba([ch,cs*0.12,cb*0.4],0.07));
+  g2.addColorStop(1,'rgba(0,0,0,0)');
+  cx.fillStyle=g2; cx.fillRect(0,0,W,H);
+}
+
+// ── Temperatura — círculos ───────────────────────────────────────────────────
+function drawTemperatura() {
+  const palMap={
+    primary:PAL.primary,complement:PAL.complement,accent:PAL.accent,
+    dark:PAL.dark,neutral:PAL.neutral,highlight:PAL.highlight,
+  };
+  for (const circ of COMP.circles) {
+    const{x,y,scale,nRings,ringPals,arc1start,arc1span,arc2start,arc2span,R}=circ;
+    const radii=[];
+    for(let i=0;i<nRings;i++) radii.push(R*Math.pow(1-i/nRings,0.75));
+
+    for(let i=0;i<nRings;i++) {
+      const pal=palMap[ringPals[i]]||PAL.primary;
+      cx.beginPath(); cx.arc(x,y,radii[i],0,Math.PI*2);
+      cx.fillStyle=hsba(pal,0.82+i*(0.18/nRings));
+      cx.fill();
+      cx.strokeStyle='rgba(6,6,10,0.52)';
+      cx.lineWidth=1.8; cx.stroke();
+    }
+
+    cx.beginPath(); cx.arc(x,y,R*1.14,arc1start,arc1start+arc1span);
+    cx.strokeStyle=hsba(PAL.complement,0.68); cx.lineWidth=3.2; cx.stroke();
+
+    cx.beginPath(); cx.arc(x,y,R*1.23,arc2start,arc2start+arc2span);
+    cx.strokeStyle=hsba(PAL.neutral,0.42); cx.lineWidth=1.8; cx.stroke();
+
+    cx.beginPath(); cx.arc(x,y,Math.max(2,R*0.04),0,Math.PI*2);
+    cx.fillStyle=hsba(PAL.accent,1.0); cx.fill();
+  }
+}
+
+// ── Presión ──────────────────────────────────────────────────────────────────
+function drawPresion() {
+  const p=C.pressure_norm;
+  const corners=[[0,0,160+p*90,28+p*14,1,1],[W,0,145+p*80,26+p*12,-1,1],
+    [0,H,130+p*70,24+p*10,1,-1],[W,H,140+p*75,24+p*12,-1,-1]];
+  for(const[bx,by,w,h,sx,sy]of corners){
+    const rx=sx===-1?bx-w:bx, ry=sy===-1?by-h:by;
+    cx.fillStyle=hsba(PAL.neutral,0.62+p*0.28);
+    cx.fillRect(rx,ry,w,h);
+    cx.strokeStyle=hsba(PAL.neutral,0.35);
+    cx.lineWidth=0.9; cx.strokeRect(rx,ry,w,h);
+  }
+  const nLines=Math.floor(7+p*11);
+  for(let i=0;i<nLines;i++){
+    const y=H*0.10+i*(H*0.72/nLines);
+    const len=50+p*130, a=0.28+p*0.28, lw=0.7+p*0.7;
+    cx.beginPath(); cx.moveTo(8,y); cx.lineTo(8+len,y);
+    cx.strokeStyle=hsba(PAL.neutral,a); cx.lineWidth=lw; cx.stroke();
+    cx.beginPath(); cx.moveTo(W-8,y); cx.lineTo(W-8-len*0.88,y);
+    cx.strokeStyle=hsba(PAL.neutral,a*0.85); cx.lineWidth=lw; cx.stroke();
+  }
+}
+
+// ── Viento ───────────────────────────────────────────────────────────────────
+function drawViento() {
+  const we=C.wind_energy;
+  const ang=Math.atan2(C.wind_dy,C.wind_dx);
+  const n=Math.floor((14+we*35)*COMP.windDensity);
+  for(let i=0;i<n;i++){
+    const sx=rnd(W*0.04,W*0.96), sy=rnd(H*0.04,H*0.96);
+    const len=(we<0.2?rnd(18,55):rnd(45,200*we+50))*COMP.windLengthMod;
+    const spread=we<0.3?0.65:0.18;
+    const a=ang+rnd(-spread,spread);
+    const ex=sx+Math.cos(a)*len, ey=sy+Math.sin(a)*len;
+    const alpha=(0.15+we*0.55)*(0.7+SR()*0.3);
+    cx.beginPath(); cx.moveTo(sx,sy); cx.lineTo(ex,ey);
+    cx.strokeStyle=hsba(PAL.complement,alpha);
+    cx.lineWidth=we<0.1?0.5:rnd(0.7,2.0+we*2.5); cx.stroke();
+  }
+}
+
+// ── PM2.5 ────────────────────────────────────────────────────────────────────
+function drawPM() {
+  const pm=C.pm_norm;
+  if(pm<0.08) return;
+  const n=Math.floor(25+pm*220);
+  const[nh,ns,nb]=PAL.neutral;
+  for(let i=0;i<n;i++){
+    const x=rnd(0,W), y=rnd(0,H), r=rnd(0.4,1.6+pm*3.5);
+    cx.beginPath(); cx.arc(x,y,r,0,Math.PI*2);
+    cx.fillStyle=hsba([nh+rnd(-25,25),ns*(0.45+pm*0.55),nb*(0.32+pm*0.42)],0.10+pm*0.22);
+    cx.fill();
+  }
+}
+
+// ── Humedad ──────────────────────────────────────────────────────────────────
+function drawHumedad() {
+  const hum=C.humidity_norm;
+  const n=Math.floor(4+hum*14);
+  for(let i=0;i<Math.min(n,COMP.triPositions.length);i++){
+    const[px,py]=COMP.triPositions[i];
+    const size=12+hum*38, angle=rnd(0,Math.PI*2);
+    cx.save(); cx.translate(px,py); cx.rotate(angle);
+    cx.beginPath();
+    cx.moveTo(0,-size); cx.lineTo(size*0.866,size*0.5); cx.lineTo(-size*0.866,size*0.5);
+    cx.closePath();
+    cx.fillStyle=hsba(PAL.complement,0.22+hum*0.42);
+    cx.fill();
+    cx.strokeStyle=hsba(PAL.complement,0.40+hum*0.25);
+    cx.lineWidth=1.4; cx.stroke();
+    cx.restore();
+  }
+}
+
+// ── Nubes ────────────────────────────────────────────────────────────────────
+function drawNubes() {
+  const cld=C.cloud_norm;
+  if(cld<0.10&&SR()>cld*6) return;
+  const n=Math.floor(2+cld*9);
+  for(let i=0;i<n;i++){
+    const x=rnd(W*0.05,W*0.95), y=rnd(H*0.04,H*0.96);
+    const w=55+cld*190+rnd(0,55), h=10+cld*38+rnd(0,14);
+    cx.save(); cx.translate(x,y); cx.rotate(rnd(-0.12,0.12));
+    cx.fillStyle=hsba(PAL.neutral,0.10+cld*0.20);
+    cx.fillRect(-w/2,-h/2,w,h);
+    cx.restore();
+  }
+}
+
+// ── ML alerta ────────────────────────────────────────────────────────────────
+function drawML() {
+  if(!C.ml_ready||C.risk_score<0.25) return;
+  const risk=C.risk_score;
+  let alertH;
+  if     (C.event_type==='heat') alertH=8;
+  else if(C.event_type==='cold') alertH=210;
+  else if(C.event_type==='rain') alertH=195;
+  else if(C.event_type==='wind') alertH=280;
+  else                           alertH=45;
+  const n=Math.floor(risk*18);
+  for(let i=0;i<n;i++){
+    const edge=Math.floor(rnd(0,4));
+    let x,y;
+    if     (edge===0){x=rnd(W*0.1,W*0.9);y=rnd(10,60);}
+    else if(edge===1){x=rnd(W-60,W-10);y=rnd(H*0.1,H*0.9);}
+    else if(edge===2){x=rnd(W*0.1,W*0.9);y=rnd(H-60,H-10);}
+    else             {x=rnd(10,60);y=rnd(H*0.1,H*0.9);}
+    const size=6+risk*18+rnd(0,6), rot=rnd(0,Math.PI*2);
+    cx.save(); cx.translate(x,y); cx.rotate(rot);
+    cx.beginPath();
+    cx.moveTo(0,-size); cx.lineTo(size*0.866,size*0.5); cx.lineTo(-size*0.866,size*0.5);
+    cx.closePath();
+    cx.fillStyle=`hsla(${alertH},82%,55%,${risk*0.42})`;
+    cx.fill();
+    cx.strokeStyle=`hsla(${alertH},90%,65%,${risk*0.28})`;
+    cx.lineWidth=1; cx.stroke();
+    cx.restore();
+  }
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+drawBg();
+drawPresion();
+drawViento();
+drawNubes();
+drawHumedad();
+drawPM();
+drawTemperatura();
+drawML();
+
+// ── UI ───────────────────────────────────────────────────────────────────────
+document.getElementById('city').textContent=
+  `ATMOSPHERICA · ${C.city.toUpperCase()} · ${C.date} · ${C.hour}h`;
+document.getElementById('dateline').textContent=
+  `${C.temp_c.toFixed(1)}°C · ${C.pressure} hPa · ${C.wind_speed.toFixed(1)} m/s ${C.wind_dir} · PM2.5 ${C.pm25.toFixed(1)} · HR ${C.humidity}%`;
+
+const legendItems=[
+  {pal:PAL.primary,    label:`temperatura ${C.temp_c.toFixed(0)}°C · hora ${C.hour}h`,
+    desc:'círculos concéntricos — calor=expansión radial, la hora dicta el tono'},
+  {pal:PAL.neutral,    label:`presión ${C.pressure} hPa`,
+    desc:'rectángulos en esquinas + líneas isobaras horizontales'},
+  {pal:PAL.complement, label:`viento ${C.wind_speed.toFixed(1)} m/s ${C.wind_dir}`,
+    desc:'diagonales en la dirección real del viento'},
+  {pal:PAL.neutral,    label:`PM2.5 ${C.pm25.toFixed(1)} μg/m³`,
+    desc:'grano de puntos dispersos — aire limpio = casi invisible'},
+  {pal:PAL.complement, label:`humedad ${C.humidity}%`,
+    desc:'triángulos en bordes — día seco = pocos y pequeños'},
+  {pal:PAL.neutral,    label:`nubes ${C.clouds}%`,
+    desc:'rectángulos alargados translúcidos'},
+];
+document.getElementById('legend').innerHTML=legendItems.map(it=>`
+  <div class="leg">
+    <div class="swatch" style="background:${hexStr(it.pal)}"></div>
+    <div class="ltext"><strong>${it.label}</strong>${it.desc}</div>
+  </div>`).join('');
+
+// ── Guardar PNG ───────────────────────────────────────────────────────────────
+function saveImg() {
+  const status=document.getElementById('status');
+  status.textContent='preparando...';
+  setTimeout(()=>{
+    try {
+      const tmp=document.createElement('canvas');
+      tmp.width=cv.width; tmp.height=cv.height;
+      const tc=tmp.getContext('2d');
+      tc.fillStyle='#06060a'; tc.fillRect(0,0,tmp.width,tmp.height);
+      tc.drawImage(cv,0,0);
+      tmp.toBlob(blob=>{
+        if(!blob){status.textContent='error al generar imagen';return;}
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url; a.download=`atmospherica_${C.city}_${C.date}_${C.hour}h.png`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(()=>URL.revokeObjectURL(url),2000);
+        status.textContent='guardado ✓';
+      },'image/png');
+    } catch(e){status.textContent='error: '+e.message;}
+  },80);
+}
+</script>
+</body>
+</html>

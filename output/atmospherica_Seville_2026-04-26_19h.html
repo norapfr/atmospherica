@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ATMOSPHERICA · Seville</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:#f5f0e8;
+    font-family:'Courier New',monospace;
+    display:flex;flex-direction:column;align-items:center;
+    padding:24px 16px 36px;min-height:100vh;
+  }
+  #header{
+    width:100%;max-width:880px;
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-bottom:18px;padding-bottom:10px;
+    border-bottom:1px solid #c8c0b0;
+  }
+  #city{font-size:10px;color:#7a7060;letter-spacing:.28em;text-transform:uppercase;}
+  #dateline{font-size:9px;color:#a09880;letter-spacing:.14em;}
+  #canvas-wrap{width:100%;max-width:880px;box-shadow:0 2px 40px rgba(0,0,0,0.12);}
+  canvas{display:block;width:100%;height:auto;}
+  #legend{
+    width:100%;max-width:880px;margin-top:28px;
+    border-top:1px solid #d8d0c0;padding-top:22px;
+  }
+  #legend h2{
+    font-size:8px;color:#b0a890;letter-spacing:.28em;text-transform:uppercase;
+    margin-bottom:18px;font-weight:normal;
+  }
+  .leg-section{margin-bottom:20px;}
+  .leg-section-title{
+    font-size:8px;color:#9a9080;letter-spacing:.22em;text-transform:uppercase;
+    margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e8e0d0;
+  }
+  .leg-rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 24px;}
+  .leg{display:flex;gap:10px;align-items:flex-start;}
+  .swatch-stack{display:flex;flex-direction:column;gap:2px;flex-shrink:0;margin-top:2px;}
+  .swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .swatch-rect{width:18px;height:8px;border-radius:1px;flex-shrink:0;margin-top:2px;}
+  .ltext{font-size:8px;color:#6a6050;letter-spacing:.04em;line-height:1.8;}
+  .ltext strong{color:#2a2018;font-weight:normal;display:block;letter-spacing:.08em;font-size:8.5px;}
+  .ltext em{color:#9a9080;font-style:normal;font-size:7.5px;}
+  .val{
+    display:inline-block;background:#ece8e0;color:#5a5040;
+    padding:1px 5px;border-radius:2px;font-size:7.5px;letter-spacing:.06em;
+    margin-left:4px;
+  }
+  .ring-diagram{
+    display:flex;align-items:center;gap:6px;margin:6px 0 2px;
+  }
+  .ring-label{font-size:7px;color:#8a8070;letter-spacing:.06em;}
+  #footer{
+    width:100%;max-width:880px;margin-top:14px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  #edition{font-size:8px;color:#b0a890;letter-spacing:.18em;}
+  #save{
+    padding:6px 20px;background:transparent;
+    border:1px solid #c0b8a8;color:#8a8070;
+    font-family:monospace;font-size:8px;letter-spacing:.18em;cursor:pointer;transition:.2s;
+  }
+  #save:hover{border-color:#7a7060;color:#3a3028;}
+  #status{font-size:8px;color:#b0a890;letter-spacing:.1em;min-height:14px;margin-top:4px;text-align:right;}
+</style>
+</head>
+<body>
+<div id="header"><div id="city"></div><div id="dateline"></div></div>
+<div id="canvas-wrap"><canvas id="c" width="880" height="1040"></canvas></div>
+<div id="legend"></div>
+<div id="footer">
+  <div id="edition"></div>
+  <div><button id="save" onclick="saveImg()">GUARDAR PNG</button><div id="status"></div></div>
+</div>
+
+<script>
+const C = {
+  "city": "Seville",
+  "date": "2026-04-26",
+  "hour": 19,
+  "temp_c": 26.67,
+  "pressure": 1013,
+  "wind_speed": 4.47,
+  "wind_dir": "ESE",
+  "wind_dx": 0.978,
+  "wind_dy": 0.208,
+  "pm25": 3.95,
+  "humidity": 42,
+  "clouds": 0,
+  "temp_norm": 0.58,
+  "pressure_norm": 0.702,
+  "wind_energy": 0.223,
+  "pm_norm": 0.053,
+  "humidity_norm": 0.375,
+  "cloud_norm": 0.0,
+  "day_type": "estable",
+  "risk_score": 0.098,
+  "event_type": "none",
+  "ml_ready": true
+};
+
+// ── Seeded RNG ────────────────────────────────────────────────────────────
+function seededRng(seed){
+  let s=seed>>>0;
+  return ()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return(s>>>0)/4294967296;};
+}
+let sv=0;
+const ks=C.date.replace(/-/g,'')+C.hour+C.city;
+for(let i=0;i<ks.length;i++) sv=(sv*31+ks.charCodeAt(i))|0;
+const SR=seededRng(Math.abs(sv)||99991);
+const rnd=(a,b)=>a+SR()*(b-a);
+const ri=(a,b)=>Math.floor(rnd(a,b+1));
+const rp=arr=>arr[Math.floor(SR()*arr.length)];
+const TAU=Math.PI*2;
+
+// ── Paleta cromática ──────────────────────────────────────────────────────
+function buildPalette(){
+  const t=C.temp_norm, h=C.hour, cld=C.cloud_norm;
+  let hue,sat,lum;
+  if(h<5)       {hue=240;sat=38;lum=22;}
+  else if(h<8)  {hue=22; sat=72;lum=48;}
+  else if(h<11) {hue=40; sat=65;lum=60;}
+  else if(h<15) {hue=195;sat=48;lum=52;}
+  else if(h<18) {hue=30; sat=70;lum=55;}
+  else if(h<21) {hue=15; sat=62;lum=40;}
+  else          {hue=220;sat=40;lum=25;}
+  const tShift=(t-0.5)*40;
+  const H1=(hue+tShift+360)%360;
+  const H2=(H1+137)%360;
+  const H3=(H1+210)%360;
+  const H4=(H1+60)%360;
+  const H5=(H1+310)%360;
+  const ds=1-cld*0.3;
+  return {
+    ink:   `hsl(${H1},${sat*ds}%,${lum*0.25}%)`,
+    A:     `hsl(${H1},${sat*ds}%,${lum}%)`,
+    B:     `hsl(${H2},${(sat+15)*ds}%,${lum*1.1}%)`,
+    C_:    `hsl(${H3},${sat*ds*0.8}%,${lum*0.75}%)`,
+    D:     `hsl(${H4},${sat*ds*1.2}%,${lum*1.25}%)`,
+    E:     `hsl(${H5},${sat*ds*0.9}%,${lum*0.9}%)`,
+    paper: `hsl(${(H1+30)%360},12%,93%)`,
+    Aa:(a)=>`hsla(${H1},${sat*ds}%,${lum}%,${a})`,
+    Ba:(a)=>`hsla(${H2},${(sat+15)*ds}%,${lum*1.1}%,${a})`,
+    Ca:(a)=>`hsla(${H3},${sat*ds*0.8}%,${lum*0.75}%,${a})`,
+    Da:(a)=>`hsla(${H4},${sat*ds*1.2}%,${lum*1.25}%,${a})`,
+    Ea:(a)=>`hsla(${H5},${sat*ds*0.9}%,${lum*0.9}%,${a})`,
+  };
+}
+
+const W=880, H=1040;
+const cv=document.getElementById('c');
+const cx=cv.getContext('2d');
+const P=buildPalette();
+
+// ── Distribución anti-solapamiento sobre TODO el canvas ───────────────────
+// El centro es candidato prioritario — no forzado, pero siempre en la lista
+function distribuirPuntos(n, mx, my){
+  const cols=Math.ceil(Math.sqrt(n*W/H))+1;
+  const rows=Math.ceil(cols*H/W)+1;
+  const cands=[];
+  for(let c=0;c<cols;c++){
+    for(let r=0;r<rows;r++){
+      const x=mx+(W-2*mx)*(c+0.5)/cols+rnd(-W/(cols*2.5),W/(cols*2.5));
+      const y=my+(H-2*my)*(r+0.5)/rows+rnd(-H/(rows*2.5),H/(rows*2.5));
+      if(x>=mx&&x<=W-mx&&y>=my&&y<=H-my) cands.push([x,y]);
+    }
+  }
+  // Centro como candidato prioritario
+  const cx2=W*0.5+rnd(-W*0.07,W*0.07);
+  const cy2=H*0.5+rnd(-H*0.07,H*0.07);
+  cands.unshift([cx2,cy2]);
+  const [first,...rest]=cands;
+  rest.sort(()=>SR()-0.5);
+  const mixed=[first,...rest];
+  const placed=[];
+  const minD=(W+H)/(n*2.2);
+  for(const[x,y]of mixed){
+    if(placed.length>=n) break;
+    if(!placed.some(([ex,ey])=>Math.hypot(x-ex,y-ey)<minD)) placed.push([x,y]);
+  }
+  return placed;
+}
+
+// ── FONDO ─────────────────────────────────────────────────────────────────
+function drawFondo(){
+  cx.fillStyle=P.paper; cx.fillRect(0,0,W,H);
+  const h=C.hour;
+  let lx,ly;
+  if(h<6)       {lx=W*.5;ly=H*1.1;}
+  else if(h<10) {lx=W*.1;ly=H*.9;}
+  else if(h<13) {lx=W*.5;ly=-H*.1;}
+  else if(h<17) {lx=W*.9;ly=H*.1;}
+  else if(h<20) {lx=W*.9;ly=H*.6;}
+  else          {lx=W*.5;ly=H*1.2;}
+  const g=cx.createRadialGradient(lx,ly,0,lx,ly,W*1.1);
+  g.addColorStop(0,P.Aa(0.18+C.temp_norm*0.14));
+  g.addColorStop(.5,P.Aa(0.06));
+  g.addColorStop(1,P.Ca(0.08));
+  cx.fillStyle=g; cx.fillRect(0,0,W,H);
+  const vg=cx.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,H*.85);
+  vg.addColorStop(0,'rgba(0,0,0,0)');
+  vg.addColorStop(1,'rgba(0,0,0,0.07)');
+  cx.fillStyle=vg; cx.fillRect(0,0,W,H);
+}
+
+// ── TEMPERATURA — discos concéntricos con color fijo según grados ─────────
+// Escala de color SIEMPRE igual — independiente de hora o paleta del día:
+//   ≤5°C  → azul profundo
+//   6–12  → azul-verde
+//   13–18 → verde-amarillo
+//   19–24 → amarillo-naranja
+//   25–30 → naranja
+//   ≥31°C → rojo
+// Tamaño del disco = magnitud de temperatura (más calor = disco más grande)
+// Los anillos son degradados del mismo color (oscuro exterior → claro interior)
+function drawTemperatura(){
+  const t=C.temp_norm;
+  const tc=C.temp_c;
+
+  // Escala cromática fija de temperatura — siempre igual en cualquier cuadro
+  function tempColor(offset){
+    // offset 0=exterior(oscuro) → 1=interior(claro)
+    let h,s,l;
+    if     (tc<=5)  {h=225; s=70; l=25+offset*30;}  // azul profundo
+    else if(tc<=12) {h=200; s=65; l=32+offset*32;}  // azul-verde
+    else if(tc<=18) {h=145; s=60; l=35+offset*30;}  // verde
+    else if(tc<=24) {h=55;  s=75; l=42+offset*28;}  // amarillo-naranja
+    else if(tc<=30) {h=28;  s=80; l=45+offset*25;}  // naranja
+    else            {h=5;   s=78; l=40+offset*28;}  // rojo
+    return `hsl(${h},${s}%,${l}%)`;
+  }
+
+  const n=ri(3,5);
+  const pts=distribuirPuntos(n,W*.1,H*.08);
+
+  for(let i=0;i<pts.length;i++){
+    const[x,y]=pts[i];
+    const peso=i===0?1.0:rnd(.35,.75);
+    const R=(55+t*90)*peso;
+    const nAnillos=ri(Math.floor(2+t*3),Math.floor(3+t*5));
+
+    // Anillos: exterior oscuro → interior claro, mismo color siempre
+    for(let a=0;a<nAnillos;a++){
+      const r=R*(1-a/nAnillos);
+      const offset=a/(nAnillos-1||1); // 0=exterior, 1=interior
+      cx.beginPath(); cx.arc(x,y,r,0,TAU);
+      cx.fillStyle=tempColor(offset);
+      cx.globalAlpha=0.82+a*(0.18/nAnillos);
+      cx.fill(); cx.globalAlpha=1;
+      // Separador tenue entre anillos
+      cx.strokeStyle='rgba(0,0,0,0.12)';
+      cx.lineWidth=0.7; cx.stroke();
+    }
+
+    // Arco exterior interrumpido — mismo color temperatura
+    const as=rnd(0,TAU), asp=rnd(Math.PI*.5,Math.PI*1.4);
+    cx.beginPath(); cx.arc(x,y,R*1.18,as,as+asp);
+    cx.strokeStyle=tempColor(0);
+    cx.lineWidth=1.4+t*1.5;
+    cx.globalAlpha=0.4+t*.25; cx.stroke(); cx.globalAlpha=1;
+
+    // Segundo arco más sutil
+    if(t>0.4){
+      const a2=as+Math.PI+rnd(-.5,.5), s2=rnd(Math.PI*.3,Math.PI*.7);
+      cx.beginPath(); cx.arc(x,y,R*1.32,a2,a2+s2);
+      cx.strokeStyle=tempColor(0.3);
+      cx.lineWidth=0.8;
+      cx.globalAlpha=0.22; cx.stroke(); cx.globalAlpha=1;
+    }
+
+    // Punto focal blanco — siempre igual, marca el centro
+    cx.beginPath(); cx.arc(x,y,Math.max(3,R*.045),0,TAU);
+    cx.fillStyle='rgba(255,255,255,0.92)'; cx.fill();
+  }
+}
+
+// ── COLORES FIJOS POR VARIABLE ────────────────────────────────────────────
+// Cada variable tiene su propio hue base. El valor climático controla
+// saturación y luminosidad — más intenso = color más vivo y opaco.
+// Independiente de hora y temperatura.
+
+// Viento → azul (hue 210–225). Más velocidad = azul más oscuro y denso.
+function windColor(a){
+  const we=C.wind_energy;
+  const s=45+we*40;   // sat: 45% calma → 85% temporal
+  const l=62-we*28;   // lum: 62% calma → 34% temporal
+  return `hsla(215,${s}%,${l}%,${a})`;
+}
+
+// Presión → ocre/siena (hue 35–42). Más presión = más sólido y cálido.
+function presColor(a){
+  const p=C.pressure_norm;
+  const s=38+p*38;    // sat: 38% baja → 76% alta
+  const l=58-p*22;    // lum: 58% baja → 36% alta
+  return `hsla(38,${s}%,${l}%,${a})`;
+}
+
+// Humedad → verde (hue 145–160). Más HR = verde más saturado y profundo.
+function humColor(a){
+  const h=C.humidity_norm;
+  const s=35+h*50;    // sat: 35% seco → 85% húmedo
+  const l=55-h*25;    // lum: 55% seco → 30% saturado
+  return `hsla(150,${s}%,${l}%,${a})`;
+}
+
+// Nubes → gris azulado (hue 210). Más cobertura = más gris y opaco.
+function cloudColor(a){
+  const c=C.cloud_norm;
+  const s=18+c*22;    // sat: casi acromático despejado → gris azulado cubierto
+  const l=65-c*30;    // lum: claro despejado → oscuro cubierto
+  return `hsla(210,${s}%,${l}%,${a})`;
+}
+
+// PM2.5 → violeta parduzco (hue 280–300). Más contaminación = más oscuro.
+function pmColor(a){
+  const pm=C.pm_norm;
+  const s=30+pm*50;   // sat: leve → muy saturado
+  const l=52-pm*28;   // lum: claro limpio → oscuro contaminado
+  return `hsla(285,${s}%,${l}%,${a})`;
+}
+
+// ── VIENTO — curvas Bézier, color azul proporcional a velocidad ───────────
+function drawViento(){
+  const we=C.wind_energy;
+  const ang=Math.atan2(C.wind_dy,C.wind_dx);
+  const n=ri(12+we*30,22+we*50);
+  for(let i=0;i<n;i++){
+    const sx=rnd(W*.02,W*.98), sy=rnd(H*.02,H*.98);
+    const len=we<.15?rnd(15,45):rnd(40,180+we*200);
+    const curv=we<.2?rnd(-.8,.8):rnd(-.25,.25);
+    const spread=we<.3?.7:.2;
+    const a=ang+rnd(-spread,spread);
+    const ex=sx+Math.cos(a)*len, ey=sy+Math.sin(a)*len;
+    const cpx=sx+Math.cos(a+Math.PI/2)*len*curv*.5+(ex-sx)*.5;
+    const cpy=sy+Math.sin(a+Math.PI/2)*len*curv*.5+(ey-sy)*.5;
+    const alpha=(0.18+we*.50)*(.6+SR()*.4);
+    cx.beginPath(); cx.moveTo(sx,sy); cx.quadraticCurveTo(cpx,cpy,ex,ey);
+    cx.strokeStyle=windColor(alpha);
+    cx.lineWidth=we<.1?rnd(.4,.8):rnd(.7,1.8+we*2.2);
+    cx.stroke();
+  }
+}
+
+// ── PRESIÓN — rectángulos ocre, solidez proporcional a hPa ───────────────
+function drawPresion(){
+  const p=C.pressure_norm;
+  const nFajas=ri(3,6+p*4);
+  for(let i=0;i<nFajas;i++){
+    const y=rnd(H*.04,H*.96);
+    const w=p>.6?rnd(W*.35,W*.65):rnd(W*.08,W*.28);
+    const h2=rnd(4,18+p*22);
+    const x=rnd(0,W-w);
+    const angle=p<.4?rnd(-.15,.15):rnd(-.04,.04);
+    cx.save(); cx.translate(x+w/2,y); cx.rotate(angle);
+    cx.fillStyle=presColor(.18+p*.40);
+    cx.fillRect(-w/2,-h2/2,w,h2);
+    cx.restore();
+  }
+  // Bloques de esquina
+  const anchors=[[0,0,1,1],[W,0,-1,1],[0,H,1,-1],[W,H,-1,-1]];
+  for(const[bx,by,sx2,sy2]of anchors){
+    if(SR()>.5+p*.3) continue;
+    const aw=40+p*80, ah=14+p*28;
+    cx.fillStyle=presColor(.50+p*.35);
+    cx.fillRect(sx2===1?bx:bx-aw,sy2===1?by:by-ah,aw,ah);
+  }
+}
+
+// ── PM2.5 — partículas violeta-parduzco, densidad proporcional ───────────
+function drawPM(){
+  const pm=C.pm_norm;
+  if(pm<.04) return;
+  // Veladura
+  cx.fillStyle=pmColor(pm*.15); cx.fillRect(0,0,W,H);
+  // Partículas
+  const n=ri(20+pm*120,40+pm*200);
+  for(let i=0;i<n;i++){
+    const x=rnd(0,W), y=rnd(0,H);
+    const r=rnd(1.5+pm*2, 4+pm*7);
+    cx.beginPath(); cx.arc(x,y,r,0,TAU);
+    cx.fillStyle=pmColor(.22+pm*.50);
+    cx.fill();
+  }
+  if(pm>.25){
+    const nm=ri(2,5);
+    for(let i=0;i<nm;i++){
+      const mx=rnd(W*.05,W*.95), my=rnd(H*.05,H*.95);
+      const mg=cx.createRadialGradient(mx,my,0,mx,my,rnd(80,200));
+      mg.addColorStop(0,pmColor(pm*.28)); mg.addColorStop(1,'rgba(0,0,0,0)');
+      cx.fillStyle=mg; cx.fillRect(0,0,W,H);
+    }
+  }
+}
+
+// ── HUMEDAD — triángulos verde, saturación proporcional a HR ──────────────
+function drawHumedad(){
+  const hum=C.humidity_norm;
+  const n=ri(3,5+hum*8);
+  const zonas=[[W*.02,W*.18],[W*.82,W*.98],[W*.22,W*.78]];
+  for(let i=0;i<n;i++){
+    const y=rnd(H*.04,H*.96);
+    const zb=rp(zonas);
+    const x=rnd(zb[0],zb[1]);
+    const size=15+hum*55;
+    if(hum<.4){
+      const ang=rnd(0,TAU);
+      cx.save(); cx.translate(x,y); cx.rotate(ang);
+      cx.beginPath();
+      cx.moveTo(0,-size); cx.lineTo(size*.8,size*.55); cx.lineTo(-size*.8,size*.55);
+      cx.closePath();
+      cx.fillStyle=humColor(.22+hum*.40); cx.fill();
+      cx.strokeStyle=humColor(.60+hum*.30); cx.lineWidth=1.0; cx.stroke();
+      cx.restore();
+    } else {
+      const rx=size*(.7+SR()*.5), ry=size*(.4+SR()*.4), angle=rnd(0,TAU);
+      cx.beginPath(); cx.ellipse(x,y,rx,ry,angle,0,TAU);
+      cx.fillStyle=humColor(.10+hum*.28); cx.fill();
+      cx.strokeStyle=humColor(.35+hum*.40); cx.lineWidth=.8; cx.stroke();
+      if(hum>.6){
+        const vg=cx.createRadialGradient(x,y,0,x,y,rx);
+        vg.addColorStop(0,humColor(hum*.32)); vg.addColorStop(1,'rgba(0,0,0,0)');
+        cx.fillStyle=vg; cx.fill();
+      }
+    }
+  }
+}
+
+// ── NUBES — rombos gris azulado, opacidad proporcional a cobertura ────────
+function drawNubes(){
+  const cld=C.cloud_norm;
+  if(cld<.04) return;
+  const n=ri(Math.floor(3+cld*5), Math.floor(6+cld*14));
+  for(let i=0;i<n;i++){
+    const x=rnd(W*.04,W*.96), y=rnd(H*.03,H*.97);
+    const w=28+cld*80+rnd(0,30);
+    const h2=w*(0.5+rnd(0,0.35));
+    const angle=rnd(-0.18,0.18);
+    cx.save(); cx.translate(x,y); cx.rotate(angle);
+    cx.beginPath();
+    cx.moveTo(0,-h2); cx.lineTo(w,0); cx.lineTo(0,h2); cx.lineTo(-w,0);
+    cx.closePath();
+    cx.fillStyle=cloudColor(.22+cld*.42); cx.fill();
+    cx.strokeStyle=cloudColor(.65+cld*.30);
+    cx.lineWidth=1.5+cld*1.8; cx.stroke();
+    cx.restore();
+  }
+}
+
+// ── ML RIESGO MAÑANA — presencia real en el cuadro ───────────────────────
+// Sin riesgo (<25%): nada visible — el cuadro está "tranquilo"
+// Riesgo medio (25-60%): veladura sutil del color del evento + marcas en borde
+// Riesgo alto (>60%): veladura fuerte + formas de alerta por todo el canvas
+// Riesgo crítico (>85%): el cuadro entero tiembla — marcas en todas las capas
+function drawML(){
+  if(!C.ml_ready||C.risk_score<.1) return;
+  const risk=C.risk_score;
+
+  // Color del evento — cada tipo tiene su propio tono
+  let rH,rS,rL;
+  if     (C.event_type==='heat') {rH=8;  rS=82;rL=48;}  // rojo-naranja
+  else if(C.event_type==='cold') {rH=215;rS=75;rL=42;}  // azul frío
+  else if(C.event_type==='rain') {rH=200;rS=70;rL=40;}  // azul-gris
+  else if(C.event_type==='wind') {rH=150;rS=60;rL=38;}  // verde tenso
+  else                           {rH=45; rS=75;rL=45;}  // ámbar genérico
+
+  const rc=(a)=>`hsla(${rH},${rS}%,${rL}%,${a})`;
+
+  // 1. VELADURA — cubre todo el canvas con el color del evento
+  // Proporcional al riesgo: apenas perceptible si riesgo bajo
+  if(risk>.15){
+    cx.fillStyle=rc(risk*0.18);
+    cx.fillRect(0,0,W,H);
+  }
+
+  // 2. MARCAS DE BORDE — triángulos que invaden desde los 4 lados
+  // Cuanto más riesgo, más grandes y más adentro entran
+  const nMarks=Math.floor(risk*22);
+  for(let i=0;i<nMarks;i++){
+    const edge=i%4;
+    let x,y,rotBase;
+    const penetra=risk*80; // cuánto entran hacia el interior
+    if(edge===0){x=rnd(W*.05,W*.95);y=rnd(4,penetra);        rotBase=0;}
+    else if(edge===1){x=rnd(W-penetra,W-4);y=rnd(H*.05,H*.95);rotBase=Math.PI*.5;}
+    else if(edge===2){x=rnd(W*.05,W*.95);y=rnd(H-penetra,H-4);rotBase=Math.PI;}
+    else              {x=rnd(4,penetra);  y=rnd(H*.05,H*.95); rotBase=Math.PI*1.5;}
+    const sz=6+risk*20+rnd(0,8);
+    cx.save(); cx.translate(x,y); cx.rotate(rotBase+rnd(-.3,.3));
+    cx.beginPath();
+    cx.moveTo(0,-sz); cx.lineTo(sz*.8,sz*.6); cx.lineTo(-sz*.8,sz*.6);
+    cx.closePath();
+    cx.fillStyle=rc(0.35+risk*.45);
+    cx.fill();
+    cx.restore();
+  }
+
+  // 3. FORMAS DISPERSAS EN EL INTERIOR si riesgo alto
+  // Se cuelan entre las demás figuras — el cuadro "se contamina" de alerta
+  if(risk>.5){
+    const nInner=Math.floor((risk-.5)*2*16);
+    for(let i=0;i<nInner;i++){
+      const x=rnd(W*.08,W*.92), y=rnd(H*.08,H*.92);
+      const sz=4+risk*14;
+      cx.save(); cx.translate(x,y); cx.rotate(rnd(0,TAU));
+      cx.beginPath();
+      cx.moveTo(0,-sz); cx.lineTo(sz*.8,sz*.6); cx.lineTo(-sz*.8,sz*.6);
+      cx.closePath();
+      cx.fillStyle=rc(0.18+risk*.22);
+      cx.fill();
+      cx.restore();
+    }
+  }
+
+  // 4. MARCO DE TENSIÓN si riesgo crítico (>80%)
+  // Un borde interior del canvas del color del evento
+  if(risk>.8){
+    const margin=12;
+    cx.strokeStyle=rc(0.55);
+    cx.lineWidth=3+risk*4;
+    cx.strokeRect(margin,margin,W-margin*2,H-margin*2);
+  }
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────
+drawFondo();
+drawPresion();
+drawNubes();
+drawViento();
+drawHumedad();
+drawPM();
+drawTemperatura();
+drawML();
+
+// ── UI ────────────────────────────────────────────────────────────────────
+document.getElementById('city').textContent=
+  `ATMOSPHERICA · ${C.city.toUpperCase()} · ${C.date} · ${C.hour}h`;
+document.getElementById('dateline').textContent=
+  `${C.temp_c.toFixed(1)}°C · ${C.pressure} hPa · ${C.wind_speed.toFixed(1)} m/s ${C.wind_dir} · PM2.5 ${C.pm25.toFixed(1)} µg/m³ · HR ${C.humidity}%`;
+document.getElementById('edition').textContent=
+  `ED. ${C.date} — ${C.day_type.toUpperCase()}`;
+
+// ── Leyenda detallada ─────────────────────────────────────────────────────
+
+const vientoDesc=`azul — velocidad ${C.wind_speed.toFixed(1)} m/s · ${C.wind_energy<.15?'calma: azul pálido y líneas cortas':C.wind_energy<.4?'moderado: azul medio':C.wind_energy<.7?'fuerte: azul intenso y líneas largas':'temporal: azul oscuro que cruza el canvas'}`;
+const humDesc=`verde — HR ${C.humidity}% · ${C.humidity_norm<.3?'seco: verde apagado y triángulos pequeños':C.humidity_norm<.6?'moderado: verde medio':C.humidity_norm<.8?'húmedo: verde saturado':'muy húmedo: verde profundo y elipses blandas'}`;
+const pmCalidad=`violeta — ${C.pm_norm<.1?'excelente: casi invisible':C.pm_norm<.25?'buena: puntos leves':C.pm_norm<.45?'moderada: puntos visibles':C.pm_norm<.65?'mala: veladura notable':'muy mala: cuadro enturbiado'}`;
+const presionDesc=`ocre — ${C.pressure} hPa · ${C.pressure_norm<.35?'baja: ocre pálido e inclinado':C.pressure_norm<.6?'normal: ocre moderado':'alta: ocre sólido y bandas anchas'}`;
+const nubesDesc=`gris azulado — ${C.clouds}% · ${C.cloud_norm<.15?'despejado: rombos pequeños y translúcidos':C.cloud_norm<.5?'parcialmente nublado':C.cloud_norm<.75?'muy nublado: rombos densos':'cubierto: gris oscuro y opaco'}`;
+
+function row(symbol, color, title, desc){
+  return `<div class="leg">
+    <div style="font-size:13px;line-height:1;margin-top:1px;color:${color};flex-shrink:0;width:18px;text-align:center;">${symbol}</div>
+    <div class="ltext"><strong>${title}</strong><em>${desc}</em></div>
+  </div>`;
+}
+
+// Muestra de color real de cada variable en este momento
+const windC  =windColor(1);
+const presC  =presColor(1);
+const humC   =humColor(1);
+const cloudC =cloudColor(1);
+const pmC    =pmColor(1);
+
+const tempScale=`
+  <div style="display:flex;gap:4px;align-items:center;margin:6px 0 2px;flex-wrap:wrap;">
+    ${[['≤5°','hsl(225,70%,38%)'],['13°','hsl(145,60%,42%)'],['19°','hsl(55,75%,52%)'],['25°','hsl(28,80%,52%)'],['31°+','hsl(5,78%,50%)']].map(([l,c])=>`
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:${c};"></div>
+        <div style="font-size:7px;color:#9a9080;">${l}</div>
+      </div>`).join('')}
+    <div style="font-size:7.5px;color:#9a9080;margin-left:6px;">frío=azul · templado=verde/amarillo · calor=naranja/rojo</div>
+  </div>`;
+
+document.getElementById('legend').innerHTML=`
+<h2>clave de lectura · figura + color + intensidad = dato climático</h2>
+
+<div class="leg-section">
+  <div class="leg-section-title">● círculos — temperatura · escala de color fija universal</div>
+  <div style="font-size:8px;color:#7a7060;line-height:1.8;margin-bottom:6px;">
+    El color siempre indica la temperatura, igual en cualquier cuadro de cualquier día.
+    Hoy: <span class="val">${C.temp_c.toFixed(1)}°C</span> · tamaño y anillos también crecen con el calor.
+  </div>
+  ${tempScale}
+</div>
+
+<div class="leg-section">
+  <div class="leg-section-title">— curvas — viento · azul</div>
+  <div class="leg-rows">
+    ${row('—', windC, `${C.wind_speed.toFixed(1)} m/s ${C.wind_dir}`, vientoDesc)}
+  </div>
+</div>
+
+<div class="leg-section">
+  <div class="leg-section-title">▭ rectángulos — presión · ocre</div>
+  <div class="leg-rows">
+    ${row('▭', presC, `${C.pressure} hPa`, presionDesc)}
+  </div>
+</div>
+
+<div class="leg-section">
+  <div class="leg-section-title">△ triángulos — humedad · verde</div>
+  <div class="leg-rows">
+    ${row('△', humC, `HR ${C.humidity}%`, humDesc)}
+  </div>
+</div>
+
+<div class="leg-section">
+  <div class="leg-section-title">◆ rombos — nubosidad · gris azulado</div>
+  <div class="leg-rows">
+    ${row('◆', cloudC, `${C.clouds}% cobertura`, nubesDesc)}
+  </div>
+</div>
+
+<div class="leg-section">
+  <div class="leg-section-title">● puntos — calidad del aire PM2.5 · violeta</div>
+  <div class="leg-rows">
+    ${row('●', pmC, `${C.pm25.toFixed(1)} µg/m³`, pmCalidad)}
+  </div>
+</div>
+
+${C.ml_ready?`
+<div class="leg-section" style="border-top:1px solid #d0c8b8;padding-top:18px;margin-top:4px;">
+  <div class="leg-section-title" style="color:${C.risk_score<.25?'#9a9080':C.risk_score<.6?'#b06020':'#c03010'};">
+    ◈ predicción ML — riesgo meteorológico mañana
+  </div>
+  ${(()=>{
+    const risk=C.risk_score;
+    const pct=(risk*100).toFixed(0);
+    const evtEs=C.event_type==='heat'?'calor extremo':C.event_type==='cold'?'frío intenso':
+                C.event_type==='rain'?'lluvia intensa':C.event_type==='wind'?'viento fuerte':'evento genérico';
+    const colorBarra=risk<.25?'#6aaa6a':risk<.6?'#e0900a':'#c83010';
+    const nivelFull=risk<.1?'SIN RIESGO — cuadro tranquilo':
+                   risk<.25?'BAJO — veladura casi imperceptible':
+                   risk<.6? 'MEDIO — veladura + marcas en los 4 bordes':
+                   risk<.85?'ALTO — formas de alerta invaden el interior':
+                            'CRÍTICO — marco de tensión + cuadro completamente teñido';
+    return `
+    <div style="font-size:8px;color:#7a7060;line-height:1.9;margin-bottom:8px;">
+      Evento probable: <span class="val" style="color:${colorBarra};">${evtEs.toUpperCase()}</span>
+      &nbsp;·&nbsp; <span class="val" style="color:${colorBarra};">${nivelFull}</span>
+    </div>
+    <div style="margin:4px 0 8px;">
+      <div style="display:flex;justify-content:space-between;font-size:7px;color:#9a9080;margin-bottom:3px;">
+        <span>0% sin riesgo</span><span>100% crítico</span>
+      </div>
+      <div style="height:8px;background:#e8e0d0;border-radius:4px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${colorBarra};border-radius:4px;"></div>
+      </div>
+      <div style="font-size:8.5px;color:${colorBarra};margin-top:3px;letter-spacing:.1em;">${pct}% DE PROBABILIDAD</div>
+    </div>`;
+  })()}
+</div>`:
+`<div class="leg-section" style="border-top:1px solid #d0c8b8;padding-top:14px;margin-top:4px;">
+  <div class="leg-section-title" style="color:#b0a890;">◈ predicción ML — no disponible</div>
+</div>`}`;// ── Guardar PNG ───────────────────────────────────────────────────────────
+function saveImg(){
+  const st=document.getElementById('status');
+  st.textContent='preparando...';
+  setTimeout(()=>{
+    try{
+      const t2=document.createElement('canvas');
+      t2.width=cv.width; t2.height=cv.height;
+      const tc=t2.getContext('2d');
+      tc.fillStyle=P.paper; tc.fillRect(0,0,t2.width,t2.height);
+      tc.drawImage(cv,0,0);
+      t2.toBlob(blob=>{
+        if(!blob){st.textContent='error';return;}
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        a.download=`atmospherica_${C.city}_${C.date}_${C.hour}h.png`;
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+        setTimeout(()=>URL.revokeObjectURL(url),2000);
+        st.textContent='guardado ✓';
+      },'image/png');
+    }catch(e){st.textContent='error: '+e.message;}
+  },80);
+}
+</script>
+</body>
+</html>

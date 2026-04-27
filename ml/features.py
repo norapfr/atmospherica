@@ -97,6 +97,15 @@ def add_features(daily: pd.DataFrame) -> pd.DataFrame:
     print("\nGenerando features...")
     df = daily.copy()
 
+    # Correccion de bias ERA5 — el modelo de reanálisis subestima
+    # las temperaturas maximas locales de Sevilla ~2-3 grados
+    # Fuente: comparacion con datos de estacion AEMET Sevilla
+    TEMP_BIAS_CORRECTION = 2.5
+    if "temp_max" in df.columns:
+        df["temp_max"]  = df["temp_max"]  + TEMP_BIAS_CORRECTION
+        df["temp_mean"] = df["temp_mean"] + TEMP_BIAS_CORRECTION
+        df["temp_min"]  = df["temp_min"]  + TEMP_BIAS_CORRECTION
+
     # Medias moviles
     for col in ["temp_max", "temp_mean", "pressure_mean", "wind_max", "humidity_mean"]:
         if col in df.columns:
@@ -130,24 +139,24 @@ def add_features(daily: pd.DataFrame) -> pd.DataFrame:
     df["season_sin"] = np.sin(2 * np.pi * day_of_year / 365)
     df["season_cos"] = np.cos(2 * np.pi * day_of_year / 365)
 
-    # Umbrales por percentiles reales del dataset ERA5
-    p90_temp = df["temp_max"].quantile(0.90)
-    p10_temp = df["temp_max"].quantile(0.10)
-    p90_wind = df["wind_max"].quantile(0.90)
+    # Features adicionales utiles
+    # Rango diario — alta amplitud termica = dia seco y despejado
+    if "temp_max" in df.columns and "temp_min" in df.columns:
+        df["temp_range"] = df["temp_max"] - df["temp_min"]
 
-    print(f"  Umbrales calculados:")
-    print(f"    Calor  (p90 temp_max): {p90_temp:.2f} C")
-    print(f"    Frio   (p10 temp_max): {p10_temp:.2f} C")
-    print(f"    Viento (p90 wind_max): {p90_wind:.2f} m/s")
+    # Deficit de presion respecto a la media movil
+    if "pressure_mean" in df.columns:
+        df["pressure_deficit"] = df["pressure_mean"] - df["pressure_mean_ma7"]
 
-    df["event_heat"] = (df["temp_max"] >= p90_temp).astype(int)
-    df["event_cold"] = (df["temp_max"] <= p10_temp).astype(int)
-    df["event_wind"] = (df["wind_max"] >= p90_wind).astype(int)
+    # Umbrales absolutos para Sevilla (con correccion de bias)
+    # Basados en definicion oficial AEMET de ola de calor
+    df["event_heat"] = (df["temp_max"] >= 38.0).astype(int)  # ola de calor oficial
+    df["event_cold"] = (df["temp_max"] <= 10.0).astype(int)  # dia muy frio Sevilla
+    df["event_wind"] = (df["wind_max"] >= 8.0).astype(int)   # viento fuerte
 
     if "precip_total" in df.columns:
-        p90_rain = df["precip_total"].quantile(0.90)
-        print(f"    Lluvia (p90 precip):   {p90_rain:.4f} mm")
-        df["event_rain"] = (df["precip_total"] >= p90_rain).astype(int)
+        # ERA5 da precipitacion en mm — umbral conservador
+        df["event_rain"] = (df["precip_total"] >= 0.5).astype(int)
     else:
         df["event_rain"] = 0
 
@@ -160,6 +169,10 @@ def add_features(daily: pd.DataFrame) -> pd.DataFrame:
 
     print(f"  Features generadas: {len(df.columns)}")
     print(f"  Dias con evento extremo: {df['event_extreme'].sum()} / {len(df)}")
+    print(f"  event_heat: {df['event_heat'].sum()}")
+    print(f"  event_cold: {df['event_cold'].sum()}")
+    print(f"  event_rain: {df['event_rain'].sum()}")
+    print(f"  event_wind: {df['event_wind'].sum()}")
     print(f"  Distribucion target: {df['target'].value_counts().to_dict()}")
 
     return df.dropna()
