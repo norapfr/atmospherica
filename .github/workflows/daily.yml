@@ -35,6 +35,6 @@ jobs:
         run: |
           git config user.name  "atmospherica-bot"
           git config user.email "bot@atmospherica"
-          git add data/history.csv output/ web/
+          git add data/history.csv output/ docs/
           git diff --staged --quiet || git commit -m "paint $(date +%Y-%m-%d)"
           git push
