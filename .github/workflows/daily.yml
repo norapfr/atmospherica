@@ -31,7 +31,7 @@ jobs:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: python main.py --headless
       
-       - name: Copiar imágenes a docs
+      - name: Copiar imágenes a docs
         run: |
           mkdir -p docs/output
           cp -r output/* docs/output/
