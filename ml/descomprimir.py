@@ -2,9 +2,9 @@
 import zipfile
 from pathlib import Path
 
-data_dir = Path("ml/data_Sevilla")
+data_dir = Path("ml/data_todo")
 
-for f in sorted(data_dir.glob("era5_sevilla_20??.nc")):
+for f in sorted(data_dir.glob("era5_sevilla_????.nc")):
     year = f.stem.split("_")[-1]
     print(f"Procesando {f.name}...")
     with zipfile.ZipFile(f, "r") as z:
@@ -23,5 +23,5 @@ for f in sorted(data_dir.glob("era5_sevilla_20??.nc")):
             print(f"  -> {target.name}")
 
 print("\nArchivos resultantes:")
-for f in sorted(data_dir.glob("era5_20??_*.nc")):
+for f in sorted(data_dir.glob("era5_????_*.nc")):
     print(f"  {f.name} ({f.stat().st_size/1024:.0f} KB)")

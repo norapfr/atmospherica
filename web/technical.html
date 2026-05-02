@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ATMOSPHERICA — Technical</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --white: #ffffff;
+            --off: #f8f7f4;
+            --border: #e8e4de;
+            --muted: #999690;
+            --text: #2a2520;
+            --mono: 'Courier New', monospace;
+        }
+
+        html {
+            font-size: 14px;
+        }
+
+        body {
+            background: var(--white);
+            color: var(--text);
+            font-family: var(--mono);
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--white);
+            border-bottom: 1px solid var(--border);
+            padding: 0 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 52px;
+        }
+
+        .logo {
+            font-size: 10px;
+            letter-spacing: .28em;
+            text-transform: uppercase;
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        nav {
+            display: flex;
+            gap: 32px;
+        }
+
+        nav a {
+            font-size: 9px;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            color: var(--muted);
+            text-decoration: none;
+            transition: color .2s;
+        }
+
+        nav a:hover,
+        nav a.active {
+            color: var(--text);
+        }
+
+        .page {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 72px 40px 100px;
+        }
+
+        .page-label {
+            font-size: 8px;
+            letter-spacing: .28em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 28px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: normal;
+            letter-spacing: .04em;
+            margin-bottom: 14px;
+            line-height: 1.3;
+        }
+
+        .subtitle {
+            font-size: 11px;
+            color: var(--muted);
+            letter-spacing: .08em;
+            margin-bottom: 52px;
+            line-height: 1.8;
+        }
+
+        .section {
+            margin-bottom: 52px;
+        }
+
+        .section h2 {
+            font-size: 9px;
+            letter-spacing: .26em;
+            text-transform: uppercase;
+            color: var(--muted);
+            font-weight: normal;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        p {
+            font-size: 9.5px;
+            color: #555;
+            line-height: 2.0;
+            margin-bottom: 14px;
+            letter-spacing: .03em;
+        }
+
+        p strong {
+            color: var(--text);
+            font-weight: normal;
+        }
+
+        /* ── Model cards ──────────────────────────────────────────── */
+        .model-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .model-card {
+            border: 1px solid var(--border);
+            padding: 18px;
+        }
+
+        .model-card-label {
+            font-size: 7px;
+            letter-spacing: .22em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .model-card-name {
+            font-size: 11px;
+            letter-spacing: .08em;
+            color: var(--text);
+            margin-bottom: 12px;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 5px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-size: 7.5px;
+            letter-spacing: .1em;
+            color: var(--muted);
+        }
+
+        .metric-val {
+            font-size: 11px;
+            color: var(--text);
+        }
+
+        .metric-val.good {
+            color: #4a7a4a;
+        }
+
+        .metric-val.mid {
+            color: #8a6a28;
+        }
+
+        .metric-val.low {
+            color: #8a3828;
+        }
+
+        /* ── Bar chart — feature importance ───────────────────────── */
+        .feat-list {
+            margin: 24px 0;
+        }
+
+        .feat-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 9px;
+        }
+
+        .feat-name {
+            font-size: 8px;
+            letter-spacing: .06em;
+            color: var(--muted);
+            width: 150px;
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .feat-bar-wrap {
+            flex: 1;
+            height: 6px;
+            background: var(--off);
+            border: 1px solid var(--border);
+            position: relative;
+        }
+
+        .feat-bar {
+            height: 100%;
+            background: var(--text);
+            transition: width .6s ease;
+        }
+
+        .feat-pct {
+            font-size: 7.5px;
+            color: var(--muted);
+            width: 36px;
+            text-align: left;
+        }
+
+        /* ── Cross-val folds ──────────────────────────────────────── */
+        .folds-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .folds-table th {
+            font-size: 7.5px;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            color: var(--muted);
+            font-weight: normal;
+            text-align: left;
+            padding: 6px 10px 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .folds-table td {
+            font-size: 9px;
+            color: #555;
+            padding: 7px 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .folds-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .folds-table .mean-row td {
+            color: var(--text);
+            border-top: 1px solid var(--border);
+        }
+
+        /* ── Training curve ──────────────────────────────────────── */
+        .curve-wrap {
+            margin: 24px 0;
+            border: 1px solid var(--border);
+            padding: 20px 20px 10px;
+        }
+
+        .curve-label {
+            font-size: 7.5px;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 14px;
+        }
+
+        canvas#curve {
+            width: 100%;
+            height: 140px;
+            display: block;
+        }
+
+        .curve-legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .curve-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 7.5px;
+            letter-spacing: .1em;
+            color: var(--muted);
+        }
+
+        .curve-legend-dot {
+            width: 14px;
+            height: 2px;
+        }
+
+        /* ── Data pipeline ────────────────────────────────────────── */
+        .pipeline {
+            margin: 24px 0;
+        }
+
+        .pipeline-step {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .pipeline-step:last-child {
+            border-bottom: none;
+        }
+
+        .step-num {
+            font-size: 9px;
+            letter-spacing: .12em;
+            color: var(--muted);
+            flex-shrink: 0;
+            width: 24px;
+            padding-top: 2px;
+        }
+
+        .step-content h3 {
+            font-size: 9px;
+            letter-spacing: .14em;
+            font-weight: normal;
+            margin-bottom: 4px;
+        }
+
+        .step-content p {
+            font-size: 8.5px;
+            margin: 0;
+        }
+
+        /* ── Code snippet ─────────────────────────────────────────── */
+        .code-block {
+            background: var(--off);
+            border: 1px solid var(--border);
+            padding: 16px 18px;
+            margin: 16px 0;
+            overflow-x: auto;
+        }
+
+        .code-block pre {
+            font-size: 8px;
+            color: #555;
+            line-height: 1.9;
+            letter-spacing: .02em;
+            white-space: pre;
+        }
+
+        .code-block .kw {
+            color: #3a5a8a;
+        }
+
+        .code-block .cm {
+            color: #999;
+            font-style: italic;
+        }
+
+        .code-block .st {
+            color: #6a4a2a;
+        }
+
+        .code-block .nm {
+            color: #2a2520;
+        }
+
+        /* ── Inline tag ───────────────────────────────────────────── */
+        .tag {
+            display: inline-block;
+            background: var(--off);
+            color: var(--muted);
+            font-size: 7.5px;
+            letter-spacing: .1em;
+            padding: 2px 8px;
+            border: 1px solid var(--border);
+            margin: 3px 3px 3px 0;
+        }
+
+        /* ── Notice box ───────────────────────────────────────────── */
+        .notice {
+            border: 1px solid var(--border);
+            padding: 14px 16px;
+            margin: 20px 0;
+            background: var(--off);
+        }
+
+        .notice-label {
+            font-size: 7px;
+            letter-spacing: .22em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 5px;
+        }
+
+        .notice p {
+            font-size: 8.5px;
+            margin: 0;
+        }
+
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        footer span {
+            font-size: 8px;
+            color: var(--muted);
+            letter-spacing: .12em;
+        }
+
+        footer a {
+            color: var(--muted);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: var(--text);
+        }
+
+        @media(max-width:640px) {
+            header {
+                padding: 0 20px;
+            }
+
+            .page {
+                padding: 48px 20px 80px;
+            }
+
+            .model-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .feat-name {
+                width: 110px;
+                font-size: 7px;
+            }
+
+            footer {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <a href="index.html" class="logo">ATMOSPHERICA</a>
+        <nav>
+            <a href="index.html">Exhibition</a>
+            <a href="about.html">Project</a>
+            <a href="technical.html" class="active">Technical</a>
+        </nav>
+    </header>
+
+    <div class="page">
+        <div class="page-label">ML model &amp; data pipeline</div>
+        <h1>Predicting extreme<br>atmospheric events.</h1>
+        <div class="subtitle">
+            Two complementary models trained on 15 years of ERA5 reanalysis data (2010–2024)
+            from a 1.5° × 1.5° grid centred on Seville. Binary target: will there be
+            an extreme weather event tomorrow?
+        </div>
+
+        <!-- ── Model comparison ─────────────────────────────────────── -->
+        <div class="section">
+            <h2>Model comparison</h2>
+            <p>
+                Both architectures were evaluated on the same temporal split.
+                The <strong>Random Forest</strong> serves as the production predictor due to
+                its superior AUC and interpretability. The <strong>LSTM</strong> was trained
+                as a sequence-aware alternative using 21-day context windows.
+            </p>
+            <div class="model-grid">
+                <div class="model-card">
+                    <div class="model-card-label">Production model</div>
+                    <div class="model-card-name">Random Forest</div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mean AUC (5-fold CV)</span>
+                        <span class="metric-val good">0.852</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mean F1 (5-fold CV)</span>
+                        <span class="metric-val mid">0.477</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Features</span>
+                        <span class="metric-val">32</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Training samples</span>
+                        <span class="metric-val">5,472</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Event rate</span>
+                        <span class="metric-val">12.2%</span>
+                    </div>
+                </div>
+                <div class="model-card">
+                    <div class="model-card-label">Experimental</div>
+                    <div class="model-card-name">AtmosphericLSTM</div>
+                    <div class="metric-row">
+                        <span class="metric-label">Test ROC-AUC</span>
+                        <span class="metric-val mid">0.695</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Test F1 (th=0.43)</span>
+                        <span class="metric-val low">0.306</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Sequence length</span>
+                        <span class="metric-val">21 days</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Parameters</span>
+                        <span class="metric-val">~95k</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Epochs (early stop)</span>
+                        <span class="metric-val">31 / 80</span>
+                    </div>
+                </div>
+            </div>
+            <div class="notice">
+                <div class="notice-label">Design decision</div>
+                <p>The LSTM was trained on only 9 raw ERA5 physical variables (no hand-crafted rolling features),
+                    making direct metric comparison unfair. Its lower F1 reflects both this constraint
+                    and the difficulty of predicting rare events with sequence models on ~15 years of daily data.</p>
+            </div>
+        </div>
+
+        <!-- ── Cross-validation folds ────────────────────────────────── -->
+        <div class="section">
+            <h2>Random Forest — cross-validation</h2>
+            <p>
+                Time-series aware 5-fold cross-validation. Folds are strictly sequential —
+                no data from the future leaks into any training window.
+                The <strong>event rate is 12.2%</strong>, creating inherent class imbalance
+                addressed with <code style="font-size:8px">class_weight='balanced'</code>.
+            </p>
+            <table class="folds-table">
+                <thead>
+                    <tr>
+                        <th>Fold</th>
+                        <th>F1</th>
+                        <th>ROC-AUC</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>0.494</td>
+                        <td>0.852</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>0.506</td>
+                        <td>0.834</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>0.432</td>
+                        <td>0.865</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>0.486</td>
+                        <td>0.842</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>0.466</td>
+                        <td>0.868</td>
+                    </tr>
+                    <tr class="mean-row">
+                        <td>Mean</td>
+                        <td>0.477</td>
+                        <td>0.852</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>
+                AUC variance across folds is low (0.834–0.868), indicating the model generalises
+                consistently. F1 variance is higher due to threshold sensitivity under imbalance;
+                the threshold is tuned per deployment context.
+            </p>
+        </div>
+
+        <!-- ── Feature importance ────────────────────────────────────── -->
+        <div class="section">
+            <h2>Feature importance — top 10</h2>
+            <p>
+                Mean decrease in impurity across all trees. <strong>Precipitation total</strong>
+                and <strong>cloud cover</strong> dominate — unsurprising for a binary target that
+                includes rain events. Pressure gradient features rank consistently,
+                confirming that synoptic-scale dynamics are the primary signal.
+            </p>
+            <div class="feat-list" id="feat-list"></div>
+        </div>
+
+        <!-- ── LSTM training curve ───────────────────────────────────── -->
+        <div class="section">
+            <h2>LSTM — training curve</h2>
+            <p>
+                Early stopping triggered at epoch 31 (patience 15 on AUC-PR).
+                The model plateaued around epoch 16, suggesting the 9-feature set
+                saturates relatively quickly. Loss continues decreasing while
+                AUC-PR stagnates — a known signature of Focal Loss on imbalanced data.
+            </p>
+            <div class="curve-wrap">
+                <div class="curve-label">Validation metrics per epoch</div>
+                <canvas id="curve" width="600" height="140"></canvas>
+                <div class="curve-legend">
+                    <div class="curve-legend-item">
+                        <div class="curve-legend-dot" style="background:#2a2520"></div>
+                        ROC-AUC
+                    </div>
+                    <div class="curve-legend-item">
+                        <div class="curve-legend-dot" style="background:#999690"></div>
+                        AUC-PR
+                    </div>
+                    <div class="curve-legend-item">
+                        <div class="curve-legend-dot" style="background:#c8c0b0; border-top: 1px dashed #999;"></div>
+                        F1
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Architecture ─────────────────────────────────────────── -->
+        <div class="section">
+            <h2>LSTM architecture</h2>
+            <p>
+                A two-layer LSTM with LayerNorm and a GELU MLP head. LayerNorm was chosen
+                over BatchNorm for stability with short sequences and small batch sizes.
+                Focal Loss (α=0.75, γ=2) shifts gradient weight toward the rare positive class.
+            </p>
+            <div class="code-block">
+                <pre><span class="cm"># AtmosphericLSTM — forward pass</span>
+Input  →  (batch, <span class="nm">21</span>, <span class="nm">9</span>)          <span class="cm"># 21-day window × 9 ERA5 features</span>
+LSTM₁  →  hidden=<span class="nm">128</span>               <span class="cm"># short-range synoptic patterns</span>
+LSTM₂  →  hidden=<span class="nm">64</span>                <span class="cm"># regime-level compression</span>
+LayerNorm  →  (batch, <span class="nm">64</span>)          <span class="cm"># last timestep only</span>
+Linear(<span class="nm">64</span>→<span class="nm">32</span>) + GELU + Dropout(<span class="nm">0.25</span>)
+Linear(<span class="nm">32</span>→<span class="nm">1</span>)  + Sigmoid         <span class="cm"># P(extreme event tomorrow)</span></pre>
+            </div>
+            <p>
+                Optimizer: AdamW (lr=3×10⁻⁴, weight decay=10⁻⁴) with cosine annealing.
+                Gradient clipping at norm 1.0. Decision threshold optimised on validation F1:
+                <strong>0.43</strong> (default 0.5 is sub-optimal under imbalance).
+            </p>
+        </div>
+
+        <!-- ── Data pipeline ─────────────────────────────────────────── -->
+        <div class="section">
+            <h2>ERA5 data pipeline</h2>
+            <div class="pipeline">
+                <div class="pipeline-step">
+                    <div class="step-num">01</div>
+                    <div class="step-content">
+                        <h3>Reanalysis download</h3>
+                        <p>CDS API (Copernicus). 7 variables at 06:00 / 12:00 / 18:00 UTC, 2010–2024.
+                            Area: 38°N–36.5°N, 6.5°W–5°W (bounding box around Seville).
+                            Format: NetCDF4, two file series — instantaneous and accumulated.</p>
+                    </div>
+                </div>
+                <div class="pipeline-step">
+                    <div class="step-num">02</div>
+                    <div class="step-content">
+                        <h3>Physical conversion &amp; daily aggregation</h3>
+                        <p>K → °C, Pa → hPa, precipitation × 1000 (m → mm), wind components → speed + direction.
+                            Humidity derived from dewpoint via Magnus formula.
+                            Resampled to daily: T<sub>max</sub>, P<sub>mean</sub>, wind<sub>max</sub>,
+                            precip<sub>sum</sub>.</p>
+                    </div>
+                </div>
+                <div class="pipeline-step">
+                    <div class="step-num">03</div>
+                    <div class="step-content">
+                        <h3>Bias correction</h3>
+                        <p>ERA5 systematically underestimates daily T<sub>max</sub> in Seville by ~2.5°C
+                            (confirmed against AEMET station data). A constant additive correction
+                            is applied before feature engineering and label thresholding.</p>
+                    </div>
+                </div>
+                <div class="pipeline-step">
+                    <div class="step-num">04</div>
+                    <div class="step-content">
+                        <h3>Feature engineering (Random Forest)</h3>
+                        <p>32 features: raw daily aggregates, 3/7-day rolling means, first and third-order
+                            gradients, 7-day linear trend (polyfit), daily thermal range, pressure deficit
+                            vs. 7-day mean, sine/cosine seasonality encoding.</p>
+                    </div>
+                </div>
+                <div class="pipeline-step">
+                    <div class="step-num">05</div>
+                    <div class="step-content">
+                        <h3>Label definition</h3>
+                        <p>Binary target: extreme event tomorrow (shift −1). Four triggers —
+                            heat (T<sub>max</sub> ≥ 38°C, AEMET ola de calor), cold (T<sub>max</sub> ≤ 10°C),
+                            wind (speed ≥ 8 m/s), rain (precip ≥ 0.5 mm). Event rate: 12.2%.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Stack ─────────────────────────────────────────────────── -->
+        <div class="section">
+            <h2>Stack</h2>
+            <div>
+                <span class="tag">Python 3.11</span>
+                <span class="tag">PyTorch</span>
+                <span class="tag">scikit-learn</span>
+                <span class="tag">xarray</span>
+                <span class="tag">ERA5 / Copernicus CDS</span>
+                <span class="tag">netCDF4</span>
+                <span class="tag">joblib</span>
+                <span class="tag">pandas</span>
+                <span class="tag">numpy</span>
+                <span class="tag">GitHub Actions</span>
+                <span class="tag">GitHub Pages</span>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <span>ATMOSPHERICA — Seville, 2026</span>
+        <span>
+            <a href="index.html">Exhibition</a> &nbsp;·&nbsp;
+            <a href="about.html">Project</a>
+        </span>
+    </footer>
+
+    <script>
+        // ── Feature importance bars ──────────────────────────────────────────
+        const features = [
+            ["precip_total", 0.05455],
+            ["cloud_mean", 0.05278],
+            ["pressure_min", 0.04659],
+            ["pressure_mean", 0.04243],
+            ["humidity_mean", 0.02572],
+            ["temp_range", 0.02268],
+            ["pressure_deficit", 0.02079],
+            ["humidity_mean_ma3", 0.01716],
+            ["pressure_mean_grad1", 0.01603],
+            ["pressure_mean_ma3", 0.01482],
+        ];
+
+        const maxVal = features[0][1];
+        const list = document.getElementById('feat-list');
+
+        features.forEach(([name, val]) => {
+            const pct = (val / maxVal * 100).toFixed(0);
+            const div = document.createElement('div');
+            div.className = 'feat-row';
+            div.innerHTML = `
+        <div class="feat-name">${name}</div>
+        <div class="feat-bar-wrap">
+            <div class="feat-bar" style="width:0%" data-w="${pct}"></div>
+        </div>
+        <div class="feat-pct">${(val * 100).toFixed(2)}%</div>
+    `;
+            list.appendChild(div);
+        });
+
+        // Animate bars on load
+        setTimeout(() => {
+            document.querySelectorAll('.feat-bar').forEach(b => {
+                b.style.width = b.dataset.w + '%';
+            });
+        }, 100);
+
+        // ── LSTM training curve ──────────────────────────────────────────────
+        const history = [
+            { epoch: 1, roc: 0.623, auc_pr: 0.185, f1: 0.080 },
+            { epoch: 2, roc: 0.645, auc_pr: 0.208, f1: 0.123 },
+            { epoch: 3, roc: 0.660, auc_pr: 0.220, f1: 0.173 },
+            { epoch: 4, roc: 0.659, auc_pr: 0.213, f1: 0.141 },
+            { epoch: 5, roc: 0.670, auc_pr: 0.225, f1: 0.232 },
+            { epoch: 6, roc: 0.670, auc_pr: 0.228, f1: 0.220 },
+            { epoch: 7, roc: 0.663, auc_pr: 0.227, f1: 0.261 },
+            { epoch: 8, roc: 0.663, auc_pr: 0.224, f1: 0.247 },
+            { epoch: 9, roc: 0.667, auc_pr: 0.225, f1: 0.253 },
+            { epoch: 10, roc: 0.671, auc_pr: 0.233, f1: 0.258 },
+            { epoch: 11, roc: 0.673, auc_pr: 0.234, f1: 0.250 },
+            { epoch: 12, roc: 0.675, auc_pr: 0.241, f1: 0.263 },
+            { epoch: 13, roc: 0.673, auc_pr: 0.230, f1: 0.217 },
+            { epoch: 14, roc: 0.675, auc_pr: 0.239, f1: 0.253 },
+            { epoch: 15, roc: 0.669, auc_pr: 0.235, f1: 0.211 },
+            { epoch: 16, roc: 0.678, auc_pr: 0.247, f1: 0.239 },
+            { epoch: 17, roc: 0.658, auc_pr: 0.233, f1: 0.239 },
+            { epoch: 18, roc: 0.670, auc_pr: 0.226, f1: 0.215 },
+            { epoch: 19, roc: 0.664, auc_pr: 0.211, f1: 0.224 },
+            { epoch: 20, roc: 0.671, auc_pr: 0.210, f1: 0.186 },
+            { epoch: 21, roc: 0.667, auc_pr: 0.208, f1: 0.172 },
+            { epoch: 22, roc: 0.670, auc_pr: 0.210, f1: 0.200 },
+            { epoch: 23, roc: 0.672, auc_pr: 0.216, f1: 0.227 },
+            { epoch: 24, roc: 0.669, auc_pr: 0.222, f1: 0.222 },
+            { epoch: 25, roc: 0.675, auc_pr: 0.230, f1: 0.214 },
+            { epoch: 26, roc: 0.661, auc_pr: 0.219, f1: 0.206 },
+            { epoch: 27, roc: 0.667, auc_pr: 0.229, f1: 0.216 },
+            { epoch: 28, roc: 0.662, auc_pr: 0.224, f1: 0.187 },
+            { epoch: 29, roc: 0.660, auc_pr: 0.218, f1: 0.192 },
+            { epoch: 30, roc: 0.675, auc_pr: 0.229, f1: 0.234 },
+            { epoch: 31, roc: 0.670, auc_pr: 0.236, f1: 0.216 },
+        ];
+
+        const canvas = document.getElementById('curve');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = canvas.offsetWidth * dpr;
+        canvas.height = canvas.offsetHeight * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        const W = canvas.offsetWidth;
+        const H = canvas.offsetHeight;
+        const PAD = { top: 10, right: 20, bottom: 24, left: 34 };
+        const cW = W - PAD.left - PAD.right;
+        const cH = H - PAD.top - PAD.bottom;
+
+        function toX(i) { return PAD.left + (i / (history.length - 1)) * cW; }
+        function toY(v, mn, mx) { return PAD.top + cH - ((v - mn) / (mx - mn)) * cH; }
+
+        const minY = 0.08, maxY = 0.78;
+
+        // Grid
+        ctx.strokeStyle = '#e8e4de';
+        ctx.lineWidth = 0.5;
+        [0.2, 0.4, 0.6].forEach(v => {
+            const y = toY(v, minY, maxY);
+            ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
+            ctx.fillStyle = '#999690';
+            ctx.font = `${7 * dpr / dpr}px 'Courier New'`;
+            ctx.textAlign = 'right';
+            ctx.fillText(v.toFixed(1), PAD.left - 5, y + 3);
+        });
+
+        // X labels
+        ctx.fillStyle = '#999690';
+        ctx.textAlign = 'center';
+        [1, 10, 20, 31].forEach(e => {
+            const idx = e - 1;
+            ctx.fillText(e, toX(idx), H - PAD.bottom + 14);
+        });
+        ctx.textAlign = 'center';
+        ctx.fillText('epoch', W / 2, H - 2);
+
+        function drawLine(key, color, dash = []) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash(dash);
+            history.forEach((d, i) => {
+                const x = toX(i), y = toY(d[key], minY, maxY);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        drawLine('roc', '#2a2520');
+        drawLine('auc_pr', '#999690');
+        drawLine('f1', '#c8c0b0', [3, 3]);
+
+        // Best epoch marker
+        const bestIdx = 15; // epoch 16
+        ctx.strokeStyle = '#aaa';
+        ctx.lineWidth = 0.8;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(toX(bestIdx), PAD.top);
+        ctx.lineTo(toX(bestIdx), PAD.top + cH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#999690';
+        ctx.textAlign = 'center';
+        ctx.fillText('best', toX(bestIdx), PAD.top + 8);
+    </script>
+
+</body>
+
+</html>

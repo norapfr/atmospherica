@@ -6,7 +6,7 @@ import sys
 sys.stdout.reconfigure(encoding="utf-8")
 
 
-def load_era5(path="ml/data_Sevilla") -> pd.DataFrame:
+def load_era5(path="ml/data_todo") -> pd.DataFrame:
     print("Cargando ERA5...")
 
     instant_files = sorted(Path(path).glob("era5_20??_instant.nc"))
@@ -25,157 +25,156 @@ def load_era5(path="ml/data_Sevilla") -> pd.DataFrame:
 
     df = ds.mean(dim=["latitude", "longitude"]).to_dataframe().reset_index()
 
-    if "valid_time" in df.columns:
-        df = df.rename(columns={"valid_time": "datetime"})
-    else:
-        df = df.rename(columns={"time": "datetime"})
+    df = df.rename(columns={
+        "valid_time": "datetime",
+        "time": "datetime",
+        "t2m": "temp_k",
+        "sp": "pressure_pa",
+        "u10": "wind_u",
+        "v10": "wind_v",
+        "d2m": "dewpoint_k",
+        "tp": "precip_accum",  # IMPORTANTE
+        "tcc": "cloud_cover",
+    })
 
-    print(f"Registros cargados: {len(df)}")
+    df = df.dropna(subset=["datetime"])
+    print(f"Registros: {len(df)}")
     return df
 
 
 def clean_and_resample(df: pd.DataFrame) -> pd.DataFrame:
-    print("\nAplicando limpieza y resample diario...")
+    print("\nLimpiando y resampleando...")
+
     df = df.set_index("datetime").sort_index()
 
-    rename = {
-        "t2m": "temp_k",
-        "sp":  "pressure_pa",
-        "u10": "wind_u",
-        "v10": "wind_v",
-        "d2m": "dewpoint_k",
-        "tp":  "precip",
-        "tcc": "cloud_cover",
-    }
-    df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
+    # ── Conversiones físicas ──
+    df["temp_c"] = df["temp_k"] - 273.15
+    df["pressure_hpa"] = df["pressure_pa"] / 100
+    df["dewpoint_c"] = df["dewpoint_k"] - 273.15
 
-    if "temp_k" in df.columns:
-        df["temp_c"]       = df["temp_k"] - 273.15
-    if "pressure_pa" in df.columns:
-        df["pressure_hpa"] = df["pressure_pa"] / 100.0
-    if "dewpoint_k" in df.columns:
-        df["dewpoint_c"]   = df["dewpoint_k"] - 273.15
-    if "wind_u" in df.columns and "wind_v" in df.columns:
-        df["wind_speed"]   = np.sqrt(df["wind_u"]**2 + df["wind_v"]**2)
-        df["wind_deg"]     = (np.degrees(np.arctan2(df["wind_u"], df["wind_v"])) + 360) % 360
+    df["wind_speed"] = np.sqrt(df["wind_u"]**2 + df["wind_v"]**2)
 
-    if "temp_c" in df.columns and "dewpoint_c" in df.columns:
-        df["humidity"] = 100 * np.exp(
-            (17.625 * df["dewpoint_c"]) / (243.04 + df["dewpoint_c"]) -
-            (17.625 * df["temp_c"])     / (243.04 + df["temp_c"])
-        )
-        df["humidity"] = df["humidity"].clip(0, 100)
+    # ── HUMEDAD REALISTA ──
+    df["humidity"] = 100 * np.exp(
+        (17.625 * df["dewpoint_c"]) / (243.04 + df["dewpoint_c"]) -
+        (17.625 * df["temp_c"])     / (243.04 + df["temp_c"])
+    )
+    df["humidity"] = df["humidity"].clip(0, 100)
 
-    if "precip" in df.columns:
-        df["precip_mm"] = df["precip"] * 1000
+    # ── PRECIPITACIÓN CORRECTA (clave) ──
+    # ERA5 accum = acumulado → hay que derivar
+    df["precip_mm"] = df["precip_accum"].diff().clip(lower=0) * 1000
 
-    agg = {}
-    if "temp_c" in df.columns:
-        agg["temp_max"]      = ("temp_c", "max")
-        agg["temp_min"]      = ("temp_c", "min")
-        agg["temp_mean"]     = ("temp_c", "mean")
-    if "pressure_hpa" in df.columns:
-        agg["pressure_mean"] = ("pressure_hpa", "mean")
-        agg["pressure_min"]  = ("pressure_hpa", "min")
-    if "wind_speed" in df.columns:
-        agg["wind_max"]      = ("wind_speed", "max")
-        agg["wind_mean"]     = ("wind_speed", "mean")
-    if "humidity" in df.columns:
-        agg["humidity_max"]  = ("humidity", "max")
-        agg["humidity_mean"] = ("humidity", "mean")
-    if "precip_mm" in df.columns:
-        agg["precip_total"]  = ("precip_mm", "sum")
-    if "cloud_cover" in df.columns:
-        agg["cloud_mean"]    = ("cloud_cover", "mean")
+    # ── Limpieza básica ──
+    df = df.replace([np.inf, -np.inf], np.nan)
 
-    daily = df.resample("D").agg(**agg).dropna()
-    print(f"  Dias disponibles: {len(daily)}")
+    # ── Resample diario ──
+    daily = df.resample("D").agg({
+        "temp_c": ["max", "min", "mean"],
+        "pressure_hpa": ["mean", "min"],
+        "wind_speed": ["max", "mean"],
+        "humidity": ["max", "mean"],
+        "precip_mm": "sum",
+        "cloud_cover": "mean"
+    })
+
+    daily.columns = ["_".join(col) for col in daily.columns]
+    daily = daily.dropna()
+
+    print(f"Días: {len(daily)}")
     return daily
 
 
-def add_features(daily: pd.DataFrame) -> pd.DataFrame:
-    print("\nGenerando features...")
-    df = daily.copy()
+def add_features(df: pd.DataFrame) -> pd.DataFrame:
+    print("\nGenerando features RF...")
 
-    # Correccion de bias ERA5 — el modelo de reanálisis subestima
-    # las temperaturas maximas locales de Sevilla ~2-3 grados
-    # Fuente: comparacion con datos de estacion AEMET Sevilla
-    TEMP_BIAS_CORRECTION = 2.5
-    if "temp_max" in df.columns:
-        df["temp_max"]  = df["temp_max"]  + TEMP_BIAS_CORRECTION
-        df["temp_mean"] = df["temp_mean"] + TEMP_BIAS_CORRECTION
-        df["temp_min"]  = df["temp_min"]  + TEMP_BIAS_CORRECTION
+    # ─────────────────────────────────────────────
+    # CORRECCIÓN LOCAL (Sevilla bias ERA5)
+    # ─────────────────────────────────────────────
+    df["temp_c_max"] += 2.5
+    df["temp_c_mean"] += 2.5
+    df["temp_c_min"] += 2.5
 
-    # Medias moviles
-    for col in ["temp_max", "temp_mean", "pressure_mean", "wind_max", "humidity_mean"]:
-        if col in df.columns:
-            df[f"{col}_ma3"] = df[col].rolling(3, min_periods=1).mean()
-            df[f"{col}_ma7"] = df[col].rolling(7, min_periods=1).mean()
+    # ─────────────────────────────────────────────
+    # ROLLING FEATURES
+    # ─────────────────────────────────────────────
+    for col in ["temp_c_max", "pressure_hpa_mean", "wind_speed_max", "humidity_mean"]:
+        df[f"{col}_ma3"] = df[col].rolling(3).mean()
+        df[f"{col}_ma7"] = df[col].rolling(7).mean()
 
-    # Gradientes
-    for col in ["temp_max", "pressure_mean", "humidity_mean"]:
-        if col in df.columns:
-            df[f"{col}_grad1"] = df[col].diff(1)
-            df[f"{col}_grad3"] = df[col].diff(3)
+    # ─────────────────────────────────────────────
+    # LAGS (CLAVE RF)
+    # ─────────────────────────────────────────────
+    for lag in [1, 2, 3]:
+        for col in ["temp_c_max", "precip_mm_sum", "wind_speed_max"]:
+            df[f"{col}_lag{lag}"] = df[col].shift(lag)
 
-    # Tendencia lineal 7 dias
-    def rolling_slope(series, window=7):
-        slopes = []
-        for i in range(len(series)):
-            if i < window - 1:
-                slopes.append(np.nan)
-            else:
-                y = series.iloc[i-window+1:i+1].values
-                x = np.arange(window)
-                slope = np.polyfit(x, y, 1)[0]
-                slopes.append(slope)
-        return pd.Series(slopes, index=series.index)
+    # ─────────────────────────────────────────────
+    # GRADIENTES
+    # ─────────────────────────────────────────────
+    df["temp_grad"] = df["temp_c_max"].diff()
+    df["pressure_grad"] = df["pressure_hpa_mean"].diff()
 
-    if "temp_max" in df.columns:
-        df["temp_trend7"] = rolling_slope(df["temp_max"])
+    # ─────────────────────────────────────────────
+    # ESTACIONALIDAD
+    # ─────────────────────────────────────────────
+    doy = df.index.dayofyear
+    df["sin_doy"] = np.sin(2 * np.pi * doy / 365)
+    df["cos_doy"] = np.cos(2 * np.pi * doy / 365)
 
-    # Estacionalidad
-    day_of_year = df.index.dayofyear
-    df["season_sin"] = np.sin(2 * np.pi * day_of_year / 365)
-    df["season_cos"] = np.cos(2 * np.pi * day_of_year / 365)
+    # ─────────────────────────────────────────────
+    # FEATURES ADICIONALES (LAS IMPORTANTES QUE PEDÍAS)
+    # ─────────────────────────────────────────────
 
-    # Features adicionales utiles
-    # Rango diario — alta amplitud termica = dia seco y despejado
-    if "temp_max" in df.columns and "temp_min" in df.columns:
-        df["temp_range"] = df["temp_max"] - df["temp_min"]
+    # Rango térmico diario
+    df["temp_range"] = df["temp_c_max"] - df["temp_c_min"]
 
-    # Deficit de presion respecto a la media movil
-    if "pressure_mean" in df.columns:
-        df["pressure_deficit"] = df["pressure_mean"] - df["pressure_mean_ma7"]
+    # Intensidad térmica
+    df["heat_intensity"] = df["temp_c_max"] - df["temp_c_mean"]
 
-    # Umbrales absolutos para Sevilla (con correccion de bias)
-    # Basados en definicion oficial AEMET de ola de calor
-    df["event_heat"] = (df["temp_max"] >= 38.0).astype(int)  # ola de calor oficial
-    df["event_cold"] = (df["temp_max"] <= 10.0).astype(int)  # dia muy frio Sevilla
-    df["event_wind"] = (df["wind_max"] >= 8.0).astype(int)   # viento fuerte
+    # Déficit de presión (con seguridad)
+    df["pressure_hpa_mean_ma7"] = df["pressure_hpa_mean"].rolling(7).mean()
+    df["pressure_deficit"] = df["pressure_hpa_mean"] - df["pressure_hpa_mean_ma7"]
 
-    if "precip_total" in df.columns:
-        # ERA5 da precipitacion en mm — umbral conservador
-        df["event_rain"] = (df["precip_total"] >= 0.5).astype(int)
-    else:
-        df["event_rain"] = 0
+    # rango humedad
+    df["humidity_range"] = df["humidity_max"] - df["humidity_mean"]
+
+    # spikes viento
+    df["wind_spike"] = df["wind_speed_max"] - df["wind_speed_mean"]
+
+    # índice seco Sevilla (MUY IMPORTANTE)
+    df["dry_index"] = df["temp_range"] * (100 - df["humidity_mean"])
+
+    # presión normalizada
+    df["pressure_norm"] = (
+        (df["pressure_hpa_mean"] - df["pressure_hpa_mean"].mean()) /
+        df["pressure_hpa_mean"].std()
+    )
+
+    # ─────────────────────────────────────────────
+    # TARGETS (EVENTOS)
+    # ─────────────────────────────────────────────
+    df["event_heat"] = (df["temp_c_max"] >= 38).astype(int)
+    df["event_cold"] = (df["temp_c_max"] <= 10).astype(int)
+    df["event_wind"] = (df["wind_speed_max"] >= 8).astype(int)
+    df["event_rain"] = (df["precip_mm_sum"] >= 1).astype(int)
 
     df["event_extreme"] = (
-        df["event_heat"] | df["event_cold"] |
-        df["event_rain"] | df["event_wind"]
+        df["event_heat"] |
+        df["event_cold"] |
+        df["event_wind"] |
+        df["event_rain"]
     ).astype(int)
 
+    # TARGET futuro (ML correcto)
     df["target"] = df["event_extreme"].shift(-1)
 
-    print(f"  Features generadas: {len(df.columns)}")
-    print(f"  Dias con evento extremo: {df['event_extreme'].sum()} / {len(df)}")
-    print(f"  event_heat: {df['event_heat'].sum()}")
-    print(f"  event_cold: {df['event_cold'].sum()}")
-    print(f"  event_rain: {df['event_rain'].sum()}")
-    print(f"  event_wind: {df['event_wind'].sum()}")
-    print(f"  Distribucion target: {df['target'].value_counts().to_dict()}")
+    df = df.dropna()
 
-    return df.dropna()
+    print("\nDistribución target:")
+    print(df["target"].value_counts(normalize=True))
+
+    return df
 
 
 def get_feature_columns(df: pd.DataFrame) -> list:
@@ -202,8 +201,8 @@ if __name__ == "__main__":
     df_daily = clean_and_resample(df_raw)
     df_feat  = add_features(df_daily)
 
-    out = Path("ml/data_Sevilla")
+    out = Path("ml/data_todo")
     out.mkdir(exist_ok=True)
-    df_feat.to_csv(out / "features15Y.csv")
-    print(f"\nFeatures guardadas en ml/data_Sevilla/features15Y.csv")
+    df_feat.to_csv(out / "featuresAll.csv")
+    print(f"\nFeatures guardadas en ml/data_todo/featuresAll.csv")
     print(df_feat.tail())

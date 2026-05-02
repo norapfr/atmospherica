@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ATMOSPHERICA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=DM+Mono:wght@300;400&display=swap"
+        rel="stylesheet">
+    <style>
+        /* ── Reset ──────────────────────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --white: #ffffff;
+            --paper: #faf9f6;
+            --stone: #f2f0eb;
+            --line: #e0ddd7;
+            --dust: #c8c4bc;
+            --ink: #1a1916;
+            --mid: #6b6860;
+            --serif: 'EB Garamond', Georgia, serif;
+            --mono: 'DM Mono', 'Courier New', monospace;
+        }
+
+        html {
+            font-size: 15px;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--paper);
+            color: var(--ink);
+            font-family: var(--serif);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── Nav ────────────────────────────────────────────────────── */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 48px;
+            height: 56px;
+            background: rgba(250, 249, 246, 0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .nav-logo {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: .32em;
+            text-transform: uppercase;
+            color: var(--ink);
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 36px;
+        }
+
+        .nav-links a {
+            font-family: var(--mono);
+            font-size: 9px;
+            letter-spacing: .2em;
+            text-transform: uppercase;
+            color: var(--mid);
+            text-decoration: none;
+            transition: color .2s;
+        }
+
+        .nav-links a:hover,
+        .nav-links a.active {
+            color: var(--ink);
+        }
+
+        /* ── Exhibition room ────────────────────────────────────────── */
+        #room {
+            min-height: 100vh;
+            padding: 120px 0 80px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Wall texture */
+        #room::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 80% 60% at 50% 40%, rgba(255, 255, 255, 0.6) 0%, transparent 70%),
+                linear-gradient(180deg, #f8f7f3 0%, #f2f0eb 50%, #ece9e2 100%);
+            z-index: 0;
+        }
+
+        /* Baseboard */
+        #room::after {
+            content: '';
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 48px;
+            background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.04));
+            border-top: 1px solid var(--line);
+            z-index: 0;
+        }
+
+        /* ── Main canvas — today's painting ────────────────────────── */
+        #stage {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #today-wrap {
+            position: relative;
+            display: inline-block;
+        }
+
+        #today-frame {
+            position: relative;
+            padding: 22px;
+            background: #f0ece4;
+            box-shadow:
+                0 0 0 1px rgba(0, 0, 0, 0.08),
+                0 2px 4px rgba(0, 0, 0, 0.06),
+                0 8px 24px rgba(0, 0, 0, 0.10),
+                0 32px 80px rgba(0, 0, 0, 0.12),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+        }
+
+        /* Ornate frame corners */
+        #today-frame::before,
+        #today-frame::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-color: rgba(0, 0, 0, 0.18);
+            border-style: solid;
+        }
+
+        #today-frame::before {
+            top: 6px;
+            left: 6px;
+            border-width: 1px 0 0 1px;
+        }
+
+        #today-frame::after {
+            bottom: 6px;
+            right: 6px;
+            border-width: 0 1px 1px 0;
+        }
+
+        #today-painting {
+            display: block;
+            width: min(520px, 72vw);
+            aspect-ratio: 9/11;
+            object-fit: cover;
+            background: #1a1814;
+        }
+
+        /* Hover spotlight on painting */
+        #today-wrap::after {
+            content: '';
+            position: absolute;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 400px;
+            background: radial-gradient(ellipse 100% 100% at 50% 0%, rgba(255, 255, 255, 0.55) 0%, transparent 65%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* Shadow on floor */
+        #today-wrap .floor-shadow {
+            position: absolute;
+            bottom: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 85%;
+            height: 18px;
+            background: radial-gradient(ellipse 80% 100% at 50% 100%, rgba(0, 0, 0, 0.18) 0%, transparent 100%);
+            filter: blur(4px);
+        }
+
+        /* ── Signature plate ────────────────────────────────────────── */
+        #plate {
+            margin-top: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #plate-title {
+            font-family: var(--serif);
+            font-size: 18px;
+            font-style: italic;
+            letter-spacing: .02em;
+            color: var(--ink);
+        }
+
+        #plate-sub {
+            font-family: var(--mono);
+            font-size: 9px;
+            letter-spacing: .22em;
+            text-transform: uppercase;
+            color: var(--mid);
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        #plate-sub .sep {
+            opacity: .35;
+        }
+
+        #download-btn {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: .2em;
+            text-transform: uppercase;
+            color: var(--dust);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: color .2s, transform .2s;
+            padding: 0 4px;
+        }
+
+        #download-btn:hover {
+            color: var(--ink);
+            transform: translateY(-1px);
+        }
+
+        #plate-date {
+            font-family: var(--mono);
+            font-size: 9px;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            color: var(--mid);
+            cursor: pointer;
+            border-bottom: 1px solid transparent;
+            transition: border-color .2s, color .2s;
+            padding-bottom: 1px;
+        }
+
+        #plate-date:hover {
+            color: var(--ink);
+            border-color: var(--dust);
+        }
+
+        #plate-dom {
+            font-family: var(--mono);
+            font-size: 8px;
+            letter-spacing: .2em;
+            text-transform: uppercase;
+            padding: 3px 10px;
+            border: 1px solid var(--line);
+            color: var(--mid);
+        }
+
+        /* ── Archive wall — smaller paintings around ────────────────── */
+        #archive {
+            position: relative;
+            z-index: 10;
+            margin-top: 80px;
+            padding: 0 40px 80px;
+        }
+
+        #archive-label {
+            text-align: center;
+            font-family: var(--mono);
+            font-size: 8px;
+            letter-spacing: .28em;
+            text-transform: uppercase;
+            color: var(--dust);
+            margin-bottom: 40px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        #archive-label::before,
+        #archive-label::after {
+            content: '';
+            flex: 1;
+            max-width: 180px;
+            height: 1px;
+            background: var(--line);
+        }
+
+        #archive-grid {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 40px 28px;
+        }
+
+        .arch-item {
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            opacity: 0;
+            animation: fadeUp .5s ease forwards;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .arch-frame {
+            position: relative;
+            padding: 10px;
+            background: #eeebe3;
+            box-shadow:
+                0 0 0 1px rgba(0, 0, 0, 0.07),
+                0 4px 16px rgba(0, 0, 0, 0.08),
+                0 12px 32px rgba(0, 0, 0, 0.06);
+            transition: transform .3s ease, box-shadow .3s ease;
+        }
+
+        .arch-item:hover .arch-frame {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow:
+                0 0 0 1px rgba(0, 0, 0, 0.08),
+                0 8px 28px rgba(0, 0, 0, 0.14),
+                0 24px 48px rgba(0, 0, 0, 0.10);
+        }
+
+        .arch-frame::before,
+        .arch-frame::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-color: rgba(0, 0, 0, 0.15);
+            border-style: solid;
+        }
+
+        .arch-frame::before {
+            top: 3px;
+            left: 3px;
+            border-width: 1px 0 0 1px;
+        }
+
+        .arch-frame::after {
+            bottom: 3px;
+            right: 3px;
+            border-width: 0 1px 1px 0;
+        }
+
+        .arch-img {
+            display: block;
+            width: 100%;
+            aspect-ratio: 9/11;
+            object-fit: cover;
+            filter: saturate(0.88) brightness(0.96);
+            transition: filter .3s;
+        }
+
+        .arch-item:hover .arch-img {
+            filter: saturate(1) brightness(1);
+        }
+
+        .arch-floor-shadow {
+            width: 80%;
+            height: 8px;
+            background: radial-gradient(ellipse 80% 100% at 50% 100%, rgba(0, 0, 0, 0.14) 0%, transparent 100%);
+            filter: blur(2px);
+        }
+
+        .arch-info {
+            text-align: center;
+        }
+
+        .arch-date {
+            font-family: var(--mono);
+            font-size: 8px;
+            letter-spacing: .14em;
+            color: var(--dust);
+            text-transform: uppercase;
+        }
+
+        .arch-dom {
+            font-family: var(--serif);
+            font-size: 11px;
+            font-style: italic;
+            color: var(--mid);
+            margin-top: 2px;
+        }
+
+        .arch-temp {
+            font-family: var(--mono);
+            font-size: 7px;
+            letter-spacing: .1em;
+            color: var(--dust);
+            margin-top: 1px;
+        }
+
+        /* ── Empty state ────────────────────────────────────────────── */
+        #empty-state {
+            text-align: center;
+            padding: 60px 0;
+            display: none;
+        }
+
+        #empty-state p {
+            font-family: var(--mono);
+            font-size: 9px;
+            color: var(--dust);
+            letter-spacing: .14em;
+            line-height: 2.2;
+        }
+
+        /* ── Legend Modal ───────────────────────────────────────────── */
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 500;
+            background: rgba(26, 25, 22, 0.72);
+            backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
+        }
+
+        #modal-overlay.open {
+            display: flex;
+        }
+
+        #modal {
+            background: var(--paper);
+            max-width: 680px;
+            width: calc(100vw - 48px);
+            max-height: 88vh;
+            overflow-y: auto;
+            padding: 48px 52px 52px;
+            position: relative;
+            box-shadow: 0 40px 120px rgba(0, 0, 0, 0.32);
+            animation: modalIn .25s ease;
+        }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #modal-close {
+            position: absolute;
+            top: 20px;
+            right: 24px;
+            font-family: var(--mono);
+            font-size: 9px;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            color: var(--mid);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: color .2s;
+        }
+
+        #modal-close:hover {
+            color: var(--ink);
+        }
+
+        .modal-eyebrow {
+            font-family: var(--mono);
+            font-size: 8px;
+            letter-spacing: .26em;
+            text-transform: uppercase;
+            color: var(--dust);
+            margin-bottom: 8px;
+        }
+
+        .modal-title {
+            font-family: var(--serif);
+            font-size: 22px;
+            font-style: italic;
+            margin-bottom: 4px;
+        }
+
+        .modal-dom {
+            font-family: var(--mono);
+            font-size: 8px;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            color: var(--mid);
+            margin-bottom: 28px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .modal-climate {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px 20px;
+            margin-bottom: 28px;
+        }
+
+        .cli-item label {
+            font-family: var(--mono);
+            font-size: 7px;
+            letter-spacing: .2em;
+            text-transform: uppercase;
+            color: var(--dust);
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .cli-item .cli-val {
+            font-family: var(--serif);
+            font-size: 16px;
+            color: var(--ink);
+        }
+
+        .modal-section-label {
+            font-family: var(--mono);
+            font-size: 8px;
+            letter-spacing: .22em;
+            text-transform: uppercase;
+            color: var(--dust);
+            margin-bottom: 14px;
+            padding-top: 20px;
+            border-top: 1px solid var(--line);
+        }
+
+        .leg-entry {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 14px;
+            align-items: flex-start;
+        }
+
+        .leg-sym {
+            font-size: 16px;
+            flex-shrink: 0;
+            width: 20px;
+            text-align: center;
+            margin-top: 2px;
+        }
+
+        .leg-body {
+            flex: 1;
+        }
+
+        .leg-var {
+            font-family: var(--serif);
+            font-size: 13px;
+            font-style: italic;
+            color: var(--ink);
+            display: block;
+            margin-bottom: 1px;
+        }
+
+        .leg-desc {
+            font-family: var(--mono);
+            font-size: 8px;
+            letter-spacing: .06em;
+            color: var(--mid);
+            line-height: 1.8;
+        }
+
+        /* ML section in modal */
+        .modal-ml {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--line);
+        }
+
+        .risk-bar {
+            height: 2px;
+            background: var(--line);
+            margin: 8px 0 4px;
+        }
+
+        .risk-fill {
+            height: 100%;
+        }
+
+        /* ── Archive item modal ─────────────────────────────────────── */
+        #arch-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 500;
+            background: rgba(26, 25, 22, 0.72);
+            backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
+        }
+
+        #arch-modal-overlay.open {
+            display: flex;
+        }
+
+        #arch-modal {
+            background: var(--paper);
+            max-width: 820px;
+            width: calc(100vw - 32px);
+            max-height: 90vh;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            position: relative;
+            box-shadow: 0 40px 120px rgba(0, 0, 0, 0.32);
+            animation: modalIn .25s ease;
+        }
+
+        #arch-modal-close {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            z-index: 10;
+            font-family: var(--mono);
+            font-size: 9px;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            color: var(--mid);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: color .2s;
+        }
+
+        #arch-modal-close:hover {
+            color: var(--ink);
+        }
+
+        #arch-modal-img {
+            width: 100%;
+            display: block;
+            aspect-ratio: 9/11;
+            object-fit: cover;
+        }
+
+        #arch-modal-info {
+            padding: 36px 36px 36px 32px;
+            overflow-y: auto;
+        }
+
+        /* ── Footer ─────────────────────────────────────────────────── */
+        footer {
+            position: relative;
+            z-index: 10;
+            border-top: 1px solid var(--line);
+            padding: 18px 48px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--paper);
+        }
+
+        footer span {
+            font-family: var(--mono);
+            font-size: 8px;
+            letter-spacing: .14em;
+            color: var(--dust);
+        }
+
+        footer a {
+            color: var(--dust);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: var(--mid);
+        }
+
+        @media (max-width: 640px) {
+            nav {
+                padding: 0 20px;
+            }
+
+            .nav-links {
+                gap: 20px;
+            }
+
+            #archive {
+                padding: 0 20px 60px;
+            }
+
+            #archive-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 28px 16px;
+            }
+
+            #modal {
+                padding: 36px 24px 40px;
+            }
+
+            .modal-climate {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            #arch-modal {
+                grid-template-columns: 1fr;
+            }
+
+            #arch-modal-img {
+                aspect-ratio: 9/7;
+            }
+
+            footer {
+                padding: 16px 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav>
+        <a href="index.html" class="nav-logo">Atmospherica</a>
+        <div class="nav-links">
+            <a href="index.html" class="active">Exhibition</a>
+            <a href="about.html">Project</a>
+            <a href="technical.html">Technical</a>
+        </div>
+    </nav>
+
+    <!-- Exhibition Room -->
+    <div id="room">
+        <div id="stage">
+            <!-- Today's painting — center of the room -->
+            <div id="today-wrap">
+                <div id="today-frame">
+                    <img id="today-painting" src="" alt="Today's atmospheric painting">
+                </div>
+                <div class="floor-shadow"></div>
+            </div>
+
+            <!-- Signature plate beneath -->
+            <div id="plate">
+                <div id="plate-title">Untitled</div>
+                <div id="plate-sub">
+                    <span id="plate-city">—</span>
+                    <span class="sep">·</span>
+                    <button id="download-btn" title="Download image">↓</button>
+                    <span id="plate-date" title="Click to read the legend">—</span>
+                    <span class="sep">·</span>
+                    <span id="plate-hour">—</span>
+                </div>
+                <div id="plate-dom">—</div>
+            </div>
+        </div>
+
+        <!-- Archive wall -->
+        <div id="archive">
+            <div id="archive-label" id="archive-count-label">Previous works</div>
+            <div id="archive-grid"></div>
+            <div id="empty-state">
+                <p>No archived works yet.<br>Run <code>python main.py</code> to generate the first painting.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <span>ATMOSPHERICA — Seville, Spain</span>
+        <span>
+            <a href="about.html">About</a>&nbsp;&nbsp;·&nbsp;&nbsp;
+            <a href="technical.html">ML Model</a>
+        </span>
+    </footer>
+
+    <!-- Today's legend modal (opens clicking the date) -->
+    <div id="modal-overlay" onclick="if(event.target===this)closeLegend()">
+        <div id="modal">
+            <button id="modal-close" onclick="closeLegend()">✕ &nbsp;close</button>
+            <div class="modal-eyebrow">Visual Legend</div>
+            <div class="modal-title" id="m-title">—</div>
+            <div class="modal-dom" id="m-dom">—</div>
+            <div class="modal-climate" id="m-climate"></div>
+            <div class="modal-section-label">Visual grammar</div>
+            <div id="m-legend"></div>
+            <div id="m-ml" class="modal-ml"></div>
+        </div>
+    </div>
+
+    <!-- Archive item modal -->
+    <div id="arch-modal-overlay" onclick="if(event.target===this)closeArchModal()">
+        <div id="arch-modal">
+            <button id="arch-modal-close" onclick="closeArchModal()">✕ close</button>
+            <img id="arch-modal-img" src="" alt="">
+            <div id="arch-modal-info"></div>
+        </div>
+    </div>
+
+    <script>
+        // ── Colour helpers (same logic as generator) ──────────────────
+        const domColors = {
+            temperatura: '#b84818', viento: '#1a6aaa', humedad: '#1a7848',
+            presion: '#9a7020', nubes: '#507088', pm25: '#784898',
+        };
+        const domNames = {
+            temperatura: 'Temperature', viento: 'Wind', humedad: 'Humidity',
+            presion: 'Pressure', nubes: 'Cloud cover', pm25: 'PM2.5',
+        };
+        function tempHsl(tc) {
+            if (tc <= 5) return `hsl(225,70%,38%)`;
+            if (tc <= 12) return `hsl(200,65%,42%)`;
+            if (tc <= 18) return `hsl(145,60%,42%)`;
+            if (tc <= 24) return `hsl(55,75%,45%)`;
+            if (tc <= 30) return `hsl(28,80%,50%)`;
+            return `hsl(5,78%,48%)`;
+        }
+        const windHsl = we => `hsl(220,${45 + we * 40}%,${42 - we * 18}%)`;
+        const humHsl = h => `hsl(150,${35 + h * 50}%,${55 - h * 25}%)`;
+        const presHsl = p => `hsl(38,${38 + p * 38}%,${58 - p * 22}%)`;
+        const cloudHsl = c => `hsl(210,${18 + c * 22}%,${65 - c * 30}%)`;
+        const pmHsl = pm => `hsl(285,${30 + pm * 50}%,${52 - pm * 28}%)`;
+
+        // ── Build legend entries from entry data ──────────────────────
+        function legendEntries(e) {
+            const hum = e.humidity_norm || 0, we = e.wind_energy || 0,
+                p = e.pressure_norm || 0, cld = e.cloud_norm || 0,
+                pm = e.pm_norm || 0, dom = e.dominant || 'temperatura';
+            const humShape = hum < 0.35 && dom !== 'humedad' && e.dominant2 !== 'humedad'
+                ? 'equilateral triangles' : 'soft ovals / ellipses';
+            return [
+                {
+                    sym: '●', col: tempHsl(e.temp_c || 20),
+                    var: `Temperature — ${(e.temp_c || 20).toFixed(1)}°C`,
+                    desc: `Concentric circles. Colour is always fixed by temperature: ≤5° blue · 6–12° teal · 13–18° green · 19–24° yellow-orange · 25–30° orange · ≥31° red.${dom === 'temperatura' ? ' DOMINANT — circles invade the canvas freely, overlapping without hierarchy.' : ''}`
+                },
+                {
+                    sym: '∿', col: windHsl(we),
+                    var: `Wind — ${(e.wind_speed || 0).toFixed(1)} m/s ${e.wind_dir || ''}`,
+                    desc: `Bézier curves aligned to the real geographic wind direction. ${we < 0.2 ? 'Calm: very short whispers.' : we < 0.5 ? 'Moderate: mid-length curves.' : 'Strong: long strokes crossing the entire canvas.'}${dom === 'viento' ? ' DOMINANT — canvas rotated in wind direction.' : ''}`
+                },
+                {
+                    sym: hum < 0.35 && dom !== 'humedad' ? '△' : '◯', col: humHsl(hum),
+                    var: `Humidity — ${e.humidity || 0}%`,
+                    desc: `${humShape}. Green; more saturated = more humid.${dom === 'humedad' ? ' DOMINANT — blurred edges, foggy expansion.' : dom === 'presion' && e.dominant2 === 'humedad' ? ' CO-DOMINANT — more ovals, soft blur.' : ''}`
+                },
+                {
+                    sym: '▬', col: presHsl(p),
+                    var: `Pressure — ${e.pressure || 1013} hPa`,
+                    desc: `Rectangles and bands. ${p > 0.65 ? 'High pressure: rigid horizontal bands — architectural composition.' : p > 0.4 ? 'Normal: moderate bands.' : 'Low pressure: small tilted fragments at the edges.'}${dom === 'presion' ? ' DOMINANT.' : ''}`
+                },
+                {
+                    sym: '◆', col: cloudHsl(cld),
+                    var: `Cloud cover — ${e.clouds || 0}%`,
+                    desc: `Flattened diamonds. ${cld < 0.2 ? 'Clear sky: few small shapes.' : cld < 0.55 ? 'Partly cloudy.' : 'Overcast: dense, flattened, concentrated in the upper half.'}${dom === 'nubes' ? ' DOMINANT — visual weight falls from above.' : ''}`
+                },
+                {
+                    sym: '·', col: pmHsl(pm),
+                    var: `PM2.5 — ${(e.pm25 || 0).toFixed(1)} µg/m³`,
+                    desc: `Dots and violet haze. ${pm < 0.15 ? 'Clean air: almost invisible.' : pm < 0.4 ? 'Moderate: visible grain.' : 'Polluted: dense haze contaminates all layers.'}${dom === 'pm25' ? ' DOMINANT — poisons every layer.' : ''}`
+                },
+            ];
+        }
+
+        function legendHTML(e) {
+            return legendEntries(e).map(l => `
+    <div class="leg-entry">
+      <span class="leg-sym" style="color:${l.col}">${l.sym}</span>
+      <div class="leg-body">
+        <span class="leg-var">${l.var}</span>
+        <span class="leg-desc">${l.desc}</span>
+      </div>
+    </div>`).join('');
+        }
+
+        function climateHTML(e) {
+            return [
+                ['Temperature', `${(e.temp_c || 0).toFixed(1)}°C`],
+                ['Pressure', `${e.pressure || 0} hPa`],
+                ['Wind', `${(e.wind_speed || 0).toFixed(1)} m/s ${e.wind_dir || ''}`],
+                ['Humidity', `${e.humidity || 0}%`],
+                ['PM2.5', `${(e.pm25 || 0).toFixed(1)} µg/m³`],
+                ['Cloud cover', `${e.clouds || 0}%`],
+            ].map(([l, v]) => `
+    <div class="cli-item">
+      <label>${l}</label>
+      <div class="cli-val">${v}</div>
+    </div>`).join('');
+        }
+
+        function mlHTML(e, accentColor) {
+            if (!e.ml_ready) return `<p style="font-family:var(--mono);font-size:8px;color:var(--dust);letter-spacing:.12em;">ML model not available.</p>`;
+            const risk = e.risk_score || 0;
+            const pct = (risk * 100).toFixed(0);
+            const names = { heat: 'Heat extreme', cold: 'Intense cold', rain: 'Heavy rain', wind: 'Strong wind' };
+            const evtEn = names[e.event_type] || 'No event forecast';
+            const rCol = risk < .25 ? '#4a9a4a' : risk < .6 ? '#b07020' : '#b03010';
+            const nivel = risk < .06 ? 'No signal' : risk < .25 ? 'Low' : risk < .5 ? 'Medium — border intrusions' : risk < .75 ? 'High — alert forms inside' : 'Critical — tension frame active';
+            return `
+    <div style="font-family:var(--mono);font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:var(--dust);margin-bottom:10px;">Tomorrow's forecast</div>
+    <div style="font-family:var(--serif);font-size:13px;color:var(--ink);margin-bottom:10px;">
+      Event: <em style="color:${rCol}">${evtEn}</em>
+    </div>
+    <div class="risk-bar"><div class="risk-fill" style="width:${pct}%;background:${rCol};"></div></div>
+    <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:${rCol};margin-top:4px;">
+      <span>${nivel}</span><span>${pct}%</span>
+    </div>`;
+        }
+
+        // ── Load archive & render ─────────────────────────────────────
+        let todayEntry = null;
+
+        async function init() {
+            let archive = [];
+            try {
+                const r = await fetch('data/archive.json');
+                archive = await r.json();
+            } catch (e) { console.warn('archive.json not found'); }
+
+            archive.sort((a, b) => (b.date + String(b.hour).padStart(2, '0')) > (a.date + String(a.hour).padStart(2, '0')) ? 1 : -1);
+
+            if (!archive.length) {
+                document.getElementById('empty-state').style.display = 'block';
+                document.getElementById('today-painting').style.background = '#2a2820';
+                document.getElementById('plate-title').textContent = 'No paintings yet';
+                document.getElementById('plate-sub').textContent = 'Run python main.py to generate the first';
+                return;
+            }
+
+            // ── Today's painting ─────────────────────────────────────────
+            todayEntry = archive[0];
+            const dom = todayEntry.dominant || 'temperatura';
+            const dCol = domColors[dom] || '#666';
+
+            document.getElementById('today-painting').src = todayEntry.image_path || '';
+            document.getElementById('plate-title').textContent =
+                `${todayEntry.city || 'Seville'}, ${todayEntry.date || ''}`;
+            document.getElementById('plate-city').textContent = todayEntry.city || 'Seville';
+            document.getElementById('plate-date').textContent = todayEntry.date || '';
+            document.getElementById('plate-hour').textContent = `${todayEntry.hour || 0}h`;
+            document.getElementById('plate-dom').textContent = domNames[dom] || dom;
+            document.getElementById('plate-dom').style.borderColor = dCol;
+            document.getElementById('plate-dom').style.color = dCol;
+            document.getElementById('plate-date').addEventListener('click', openLegend);
+
+            // ── Archive paintings ─────────────────────────────────────────
+            const rest = archive.slice(1);
+            if (!rest.length) {
+                document.getElementById('empty-state').style.display = 'block';
+                return;
+            }
+            document.getElementById('archive-label').textContent =
+                `${rest.length} work${rest.length !== 1 ? 's' : ''} in the archive`;
+
+            const grid = document.getElementById('archive-grid');
+            rest.forEach((e, i) => {
+                const dom2 = e.dominant || 'temperatura';
+                const el = document.createElement('div');
+                el.className = 'arch-item';
+                el.style.animationDelay = `${i * 0.06}s`;
+                el.innerHTML = `
+      <div class="arch-frame">
+        <img class="arch-img" src="${e.image_path || ''}" alt="${e.date}" loading="lazy">
+      </div>
+      <div class="arch-floor-shadow"></div>
+      <div class="arch-info">
+        <div class="arch-date">${e.date} · ${e.hour}h</div>
+        <div class="arch-dom" style="color:${domColors[dom2] || '#666'}">${domNames[dom2] || dom2}</div>
+        <div class="arch-temp">${(e.temp_c || 0).toFixed(1)}°C · ${e.humidity || 0}% RH</div>
+      </div>`;
+                el.addEventListener('click', () => openArchModal(e));
+                grid.appendChild(el);
+            });
+        }
+
+        // ── Today legend modal ────────────────────────────────────────
+        function openLegend() {
+            if (!todayEntry) return;
+            const e = todayEntry;
+            const dom = e.dominant || 'temperatura';
+            const dCol = domColors[dom] || '#666';
+            document.getElementById('m-title').textContent =
+                `${e.city || 'Seville'}, ${e.date}`;
+            document.getElementById('m-dom').innerHTML =
+                `Dominant variable: <span style="color:${dCol}">${domNames[dom]}</span>${e.dominant2 ? ` &nbsp;+&nbsp; <span style="color:${domColors[e.dominant2] || '#999'}">${domNames[e.dominant2]} co-dominant</span>` : ''}`;
+            document.getElementById('m-climate').innerHTML = climateHTML(e);
+            document.getElementById('m-legend').innerHTML = legendHTML(e);
+            document.getElementById('m-ml').innerHTML = mlHTML(e);
+            document.getElementById('modal-overlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeLegend() {
+            document.getElementById('modal-overlay').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        // ── Archive item modal ────────────────────────────────────────
+        function openArchModal(e) {
+            const dom = e.dominant || 'temperatura';
+            const dCol = domColors[dom] || '#666';
+            document.getElementById('arch-modal-img').src = e.image_path || '';
+            document.getElementById('arch-modal-info').innerHTML = `
+    <div class="modal-eyebrow">Archive</div>
+    <div class="modal-title">${e.city || 'Seville'}, ${e.date}</div>
+    <div class="modal-dom" style="color:${dCol};border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:20px;">
+      ${domNames[dom]} dominant${e.dominant2 ? ` · ${domNames[e.dominant2]} co-dominant` : ''}
+    </div>
+    <div class="modal-climate" style="margin-bottom:20px;">${climateHTML(e)}</div>
+    <div class="modal-section-label" style="padding-top:16px;border-top:1px solid var(--line);">Visual grammar</div>
+    ${legendHTML(e)}
+    <div class="modal-ml">${mlHTML(e)}</div>`;
+            document.getElementById('arch-modal-overlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeArchModal() {
+            document.getElementById('arch-modal-overlay').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { closeLegend(); closeArchModal(); }
+        });
+
+        init();
+
+        function downloadCurrentImage() {
+            if (!todayEntry || !todayEntry.image_path) return;
+
+            const link = document.createElement('a');
+            link.href = todayEntry.image_path;
+
+            const name = `${todayEntry.city || 'painting'}_${todayEntry.date}_${todayEntry.hour}h.jpg`;
+            link.download = name.replace(/\s+/g, '_');
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        document.getElementById('download-btn')
+            .addEventListener('click', downloadCurrentImage);
+    </script>
+</body>
+
+</html>

@@ -1,7 +1,7 @@
 # diagnostico_features.py
 import pandas as pd
 
-df = pd.read_csv("ml/data/features.csv", index_col=0, parse_dates=True)
+df = pd.read_csv("ml/data_Sevilla/features15Y.csv", index_col=0, parse_dates=True)
 
 print("=== ESTADISTICAS DE TEMPERATURA ===")
 print(df["temp_max"].describe())
