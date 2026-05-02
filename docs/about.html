@@ -131,6 +131,7 @@
             font-weight: normal;
         }
 
+        /* ── Grammar grid ─────────────────────────────────── */
         .grammar-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -162,6 +163,52 @@
             line-height: 1.7;
         }
 
+        /* ── Dominant system ──────────────────────────────── */
+        .dominant-explainer {
+            border: 1px solid var(--border);
+            background: var(--off);
+            padding: 20px;
+            margin: 24px 0;
+        }
+
+        .dominant-explainer-label {
+            font-size: 7px;
+            letter-spacing: .24em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+
+        .dom-scenario {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .dom-scenario:last-child {
+            border-bottom: none;
+        }
+
+        .dom-scenario-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            width: 24px;
+        }
+
+        .dom-scenario-text {
+            font-size: 8px;
+            color: #666;
+            line-height: 1.7;
+        }
+
+        .dom-scenario-text strong {
+            color: var(--text);
+            font-weight: normal;
+        }
+
+        /* ── Pipeline ─────────────────────────────────────── */
         .pipeline {
             margin: 24px 0;
         }
@@ -199,6 +246,46 @@
             margin: 0;
         }
 
+        /* ── Bars: variable normalizada ───────────────────── */
+        .var-bars {
+            margin: 20px 0;
+        }
+
+        .var-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .var-name {
+            font-size: 7.5px;
+            letter-spacing: .08em;
+            color: var(--muted);
+            width: 80px;
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .var-bar-wrap {
+            flex: 1;
+            height: 5px;
+            background: var(--off);
+            border: 1px solid var(--border);
+        }
+
+        .var-bar {
+            height: 100%;
+        }
+
+        .var-label {
+            font-size: 7px;
+            color: var(--muted);
+            width: 32px;
+            text-align: left;
+        }
+
+        /* ── Tag ──────────────────────────────────────────── */
         .tag {
             display: inline-block;
             background: var(--off);
@@ -208,6 +295,48 @@
             padding: 2px 8px;
             border: 1px solid var(--border);
             margin: 3px 3px 3px 0;
+        }
+
+        /* ── Distinction block ────────────────────────────── */
+        .distinction {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin: 20px 0;
+        }
+
+        .distinction-col {
+            padding: 14px;
+            border: 1px solid var(--border);
+        }
+
+        .distinction-label {
+            font-size: 7px;
+            letter-spacing: .2em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        .distinction-item {
+            font-size: 8px;
+            color: #666;
+            line-height: 1.9;
+            padding: 3px 0;
+        }
+
+        .distinction-item::before {
+            margin-right: 8px;
+        }
+
+        .distinction-col.no .distinction-item::before {
+            content: '✕';
+            color: #ccc;
+        }
+
+        .distinction-col.yes .distinction-item::before {
+            content: '✓';
+            color: var(--text);
         }
 
         footer {
@@ -232,7 +361,7 @@
             color: var(--text);
         }
 
-        @media(max-width:640px) {
+        @media(max-width: 640px) {
             header {
                 padding: 0 20px;
             }
@@ -242,6 +371,10 @@
             }
 
             .grammar-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .distinction {
                 grid-template-columns: 1fr;
             }
 
@@ -268,80 +401,158 @@
         <h1>The climate is not visualized.<br>The climate commands.</h1>
         <div class="subtitle">
             ATMOSPHERICA is a Machine Learning system that transforms real-time atmospheric data
-            into generative abstract painting. Each artwork is unique.
-            Every formal decision comes from real data.
+            into generative abstract painting. Each artwork is unique, unrepeatable, and encodes
+            today's atmospheric state in a visual language with its own grammar.
         </div>
 
+        <!-- ── The idea ─────────────────────────────────────────── -->
         <div class="section">
             <h2>The idea</h2>
             <p>
                 There is a fundamental difference between <strong>visualizing data</strong>
-                and <strong>translating it into visual language</strong>. A chart shows temperature.
-                ATMOSPHERICA turns it into color, into form, into composition.
+                and <strong>translating it into a visual language</strong>. A chart shows temperature
+                as a rising line. The data is readable but not experienced.
             </p>
             <p>
-                The system calculates which climate variable has the highest normalized value at
-                any given moment — temperature, wind, humidity, pressure, clouds or PM2.5 — and that
-                variable <strong>deforms the entire visual system</strong>. It does not only control its own
-                form: it reshapes the global composition, orients the canvas, compresses or expands
-                all other elements.
+                ATMOSPHERICA proposes something else: the datum <strong>is</strong> the form.
+                Temperature does not appear on a Y axis — it determines the complete color range of the canvas.
+                Wind does not appear as an arrow — its Bézier strokes cross the canvas in the exact geographic
+                direction of the real wind, with length proportional to wind speed in m/s.
+                Atmospheric pressure is not a number — it decides whether the composition organizes into
+                architectural horizontal bands (anticyclone) or into tilted, unstable rectangles
+                at the edges (low pressure system).
             </p>
             <p>
                 The result is a painting that <strong>feels different</strong> depending on the climate.
-                A day of extreme heat in July produces something radically different from a windy
-                autumn day or a cloudy morning in January — without reading a single number.
+                A July heatwave in Seville produces something radically different from a windy autumn day
+                or a cloudy January morning — without reading a single number.
             </p>
         </div>
 
+        <!-- ── Visual grammar ──────────────────────────────────── -->
         <div class="section">
             <h2>Visual grammar</h2>
-            <p>Each climate variable has its own family of forms, its own fixed color
-                and its own behavior depending on the data value.</p>
+            <p>
+                Each climate variable has its own family of forms, its own fixed color, and its own
+                behavior depending on the data value. This grammar is the heart of the project:
+                the set of rules that makes each visual decision traceable to a real measurement.
+            </p>
             <div class="grammar-grid">
                 <div class="grammar-item">
                     <div class="grammar-sym" style="color:hsl(28,80%,50%)">●</div>
                     <div class="grammar-var">Temperature</div>
-                    <div class="grammar-desc">Concentric circles. Universal fixed color:
-                        blue=cold · green=temperate · orange=heat · red=extreme.
-                        Dominant: they invade the canvas without hierarchy.</div>
+                    <div class="grammar-desc">Concentric circles. Fixed color by °C:
+                        ≤5° blue · 6–12° blue-green · 13–18° green · 19–24° yellow-orange · 25–30° orange · ≥31° red.
+                        Dominant: circles invade the canvas with no hierarchy. They overlap freely.</div>
                 </div>
                 <div class="grammar-item">
                     <div class="grammar-sym" style="color:hsl(215,65%,50%)">∿</div>
                     <div class="grammar-var">Wind</div>
                     <div class="grammar-desc">Bézier curves oriented according to the real
-                        geographic wind direction. Dominant: lines crossing the entire canvas.
-                        The canvas rotates slightly.</div>
+                        geographic wind direction (vectorially decomposed from degrees).
+                        Dominant: long lines crossing the entire canvas. The canvas rotates
+                        slightly in the wind's direction.</div>
                 </div>
                 <div class="grammar-item">
                     <div class="grammar-sym" style="color:hsl(150,55%,44%)">◯</div>
                     <div class="grammar-var">Humidity</div>
-                    <div class="grammar-desc">Triangles at low humidity. Diffuse ovals
-                        with halos at high humidity. Dominant: blurred edges,
-                        dense fog sensation.</div>
+                    <div class="grammar-desc">Triangles at low humidity (&lt;35% RH).
+                        Diffuse ovals with halos at high humidity. Dominant: blurred edges,
+                        dense fog sensation. Filter applied proportionally to humidity level.</div>
                 </div>
                 <div class="grammar-item">
                     <div class="grammar-sym" style="color:hsl(38,58%,50%)">▬</div>
                     <div class="grammar-var">Pressure</div>
-                    <div class="grammar-desc">Rectangles. High pressure: horizontal
-                        parallel bands, architectural composition. Low pressure:
-                        tilted fragments at the edges.</div>
+                    <div class="grammar-desc">Rectangles and bands. High pressure: horizontal
+                        parallel bands sweeping the canvas — architectural composition.
+                        Low pressure: tilted fragments at the edges — visual instability.</div>
                 </div>
                 <div class="grammar-item">
                     <div class="grammar-sym" style="color:hsl(210,30%,58%)">◆</div>
                     <div class="grammar-var">Clouds</div>
-                    <div class="grammar-desc">Flattened diamonds. Dominant: visual weight
-                        at the top, reduced contrast, the sky collapses over everything.</div>
+                    <div class="grammar-desc">Flattened diamonds concentrated in the upper half
+                        of the canvas. Dominant: visual weight falls from above.
+                        Sky collapses over everything. Squish modifier applied globally.</div>
                 </div>
                 <div class="grammar-item">
                     <div class="grammar-sym" style="color:hsl(285,45%,48%)">·</div>
                     <div class="grammar-var">PM2.5</div>
-                    <div class="grammar-desc">Dots and violet haze. Dominant:
-                        contaminates all previous layers. Pollution makes
-                        the rest of the image unreadable.</div>
+                    <div class="grammar-desc">Dots and violet haze applied as a final global layer.
+                        Dominant: dense purple veil contaminating all previous layers.
+                        Horizontal smog veins appear above 45% intensity.</div>
+                </div>
+            </div>
+            <p>
+                One additional layer — <strong>rain</strong> — appears on top of everything when
+                precipitation is detected. Diagonal strokes lean according to real wind direction;
+                intensity and density scale with mm/h.
+            </p>
+        </div>
+
+        <!-- ── Dominant variable ───────────────────────────────── -->
+        <div class="section">
+            <h2>The dominant variable</h2>
+            <p>
+                This is the central conceptual mechanism of v2. All six variables are normalized
+                to [0, 1] using local historical ranges for Seville. The variable with the highest
+                normalized value at that moment <strong>takes over the entire composition</strong>
+                and deforms how everything else behaves.
+            </p>
+
+            <div class="var-bars" id="var-demo"></div>
+
+            <p style="margin-top: 8px;">
+                Example: 1014 hPa occupies 60% of the 990–1030 hPa range.
+                20°C occupies 43% of the 0–46°C range. Pressure wins.
+                The canvas fills with horizontal bands. Everything else
+                is subordinated to the structural order of the anticyclone.
+            </p>
+
+            <div class="dominant-explainer">
+                <div class="dominant-explainer-label">What changes when a variable dominates</div>
+                <div class="dom-scenario">
+                    <div class="dom-scenario-icon" style="color:hsl(28,80%,50%)">●</div>
+                    <div class="dom-scenario-text">
+                        <strong>Temperature dominates</strong> — many concentric circles invade the canvas
+                        without hierarchy. Global scale increases. The canvas feels charged with thermal energy.
+                    </div>
+                </div>
+                <div class="dom-scenario">
+                    <div class="dom-scenario-icon" style="color:hsl(215,65%,50%)">∿</div>
+                    <div class="dom-scenario-text">
+                        <strong>Wind dominates</strong> — 50–90 long lines cross the canvas from edge to edge.
+                        The entire canvas rotates in the real wind's geographic direction.
+                        Everything else aligns to the flow.
+                    </div>
+                </div>
+                <div class="dom-scenario">
+                    <div class="dom-scenario-icon" style="color:hsl(150,55%,44%)">◯</div>
+                    <div class="dom-scenario-text">
+                        <strong>Humidity dominates</strong> — ovals expand across the full canvas with
+                        blur applied proportionally. The image saturates with diffuse edges.
+                        Sensation of saturated air, impending rain.
+                    </div>
+                </div>
+                <div class="dom-scenario">
+                    <div class="dom-scenario-icon" style="color:hsl(38,58%,50%)">▬</div>
+                    <div class="dom-scenario-text">
+                        <strong>Pressure dominates</strong> — horizontal parallel bands sweep the canvas
+                        in architectural order. Corner blocks appear. A second variable acts as
+                        co-dominant, adding its own layer beneath the pressure structure.
+                    </div>
+                </div>
+                <div class="dom-scenario">
+                    <div class="dom-scenario-icon" style="color:hsl(285,45%,48%)">·</div>
+                    <div class="dom-scenario-text">
+                        <strong>PM2.5 dominates</strong> — dense violet veil covers all layers.
+                        Particles contaminate the entire image, smog lines cut through horizontally.
+                        The painting becomes unreadable through pollution.
+                    </div>
                 </div>
             </div>
         </div>
 
+        <!-- ── Pipeline ────────────────────────────────────────── -->
         <div class="section">
             <h2>Technical pipeline</h2>
             <div class="pipeline">
@@ -349,40 +560,159 @@
                     <div class="step-num">01</div>
                     <div class="step-content">
                         <h3>Real-time data ingestion</h3>
-                        <p>OpenWeatherMap API — temperature, pressure, wind, humidity, clouds.
-                            Air Pollution API — PM2.5, NO₂, O₃. Data updated on every execution.</p>
+                        <p>OpenWeatherMap API — temperature, pressure, wind speed and direction, humidity, clouds,
+                            precipitation. Air Pollution API — PM2.5, NO₂, O₃. Both called on every execution,
+                            credentials managed via environment variables.</p>
                     </div>
                 </div>
                 <div class="pipeline-step">
                     <div class="step-num">02</div>
                     <div class="step-content">
                         <h3>Normalization and visual mapping</h3>
-                        <p>Each variable is normalized using historical ranges from Seville.
-                            The mapper computes 15 visual parameters: color, density,
-                            fragmentation, opacity, stroke direction.</p>
+                        <p>Each variable is normalized using historical ranges calibrated for Seville.
+                            Wind direction is decomposed into Cartesian components (dx, dy) for vectorial
+                            stroke orientation. The mapper computes 15+ visual parameters and determines
+                            the dominant variable via argmax of normalized values.</p>
                     </div>
                 </div>
                 <div class="pipeline-step">
                     <div class="step-num">03</div>
                     <div class="step-content">
-                        <h3>Predictive ML model</h3>
-                        <p>Random Forest trained with 5 years of ERA5 data (Copernicus).
-                            Predicts the probability of extreme events the next day.
-                            AUC 0.854 · F1 0.694. The prediction visually alters the piece.</p>
+                        <h3>Daily history accumulation</h3>
+                        <p>Each execution appends to a local CSV that persists in the repository.
+                            The system accumulates one row per day — 3 daily API calls aggregate into a
+                            single daily record. After 7 days, rolling means are real.
+                            After 14 days, all lag features are complete.</p>
                     </div>
                 </div>
                 <div class="pipeline-step">
                     <div class="step-num">04</div>
                     <div class="step-content">
+                        <h3>ML predictive model</h3>
+                        <p>Random Forest trained on 15 years of ERA5 reanalysis data (Copernicus).
+                            32 features including rolling means, temporal lags, pressure gradients, and
+                            seasonal encoding. Predicts probability of extreme weather tomorrow.
+                            Mean AUC 0.836 across 5 time-series folds.</p>
+                    </div>
+                </div>
+                <div class="pipeline-step">
+                    <div class="step-num">05</div>
+                    <div class="step-content">
                         <h3>Pictorial generation</h3>
-                        <p>HTML5 Canvas with JavaScript. Deterministic seed — the same climate
-                            always produces the same image. The dominant variable deforms
-                            the entire visual system.</p>
+                        <p>HTML5 Canvas with native JavaScript. Deterministic seeded RNG — the same day
+                            and city always produce exactly the same painting, in any browser, on any machine.
+                            The dominant variable deforms the entire visual system across 8 render passes.</p>
+                    </div>
+                </div>
+                <div class="pipeline-step">
+                    <div class="step-num">06</div>
+                    <div class="step-content">
+                        <h3>Automated publication</h3>
+                        <p>GitHub Actions runs 3 times daily (08h, 12h, 20h local time).
+                            Playwright exports PNG headlessly. Git commits the PNG, the history CSV,
+                            and the archive JSON. GitHub Pages serves the gallery automatically.</p>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- ── ML alarm ───────────────────────────────────────── -->
+        <div class="section">
+            <h2>Tomorrow's risk — visible today</h2>
+            <p>
+                The Random Forest predicts the probability of an extreme weather event the next day.
+                When the risk is significant, the painting carries visual signals of the future event
+                embedded in today's composition — using the <strong>shape of today's dominant variable</strong>
+                in the <strong>color of tomorrow's predicted event</strong>.
+            </p>
+            <p>
+                The signals activate by progressive risk thresholds. The legend of each painting
+                shows exactly which layers are active and at what probability they trigger.
+            </p>
+
+            <div class="dominant-explainer">
+                <div class="dominant-explainer-label">Risk layers — activation thresholds</div>
+
+                <div class="dom-scenario">
+                    <div class="dom-scenario-icon" style="color:#888;font-size:11px;">▲</div>
+                    <div class="dom-scenario-text">
+                        <strong>Risk &gt; 6% — Edge triangles.</strong>
+                        Small triangles penetrate inward from all four margins.
+                        The higher the risk, the deeper they reach into the composition.
+                        Above 60% each triangle doubles with an inner form.
+                    </div>
+                </div>
+                <div class="dom-scenario">
+                    <div class="dom-scenario-icon" style="color:#888;font-size:11px;">~</div>
+                    <div class="dom-scenario-text">
+                        <strong>Risk &gt; 20% — Background tint.</strong>
+                        A semi-transparent wash in the event's color spreads over the entire canvas.
+                        Heat events tint the painting red-orange. Cold events, steel blue.
+                        Wind, green-teal. Rain, slate grey.
+                    </div>
+                </div>
+                <div class="dom-scenario">
+                    <div class="dom-scenario-icon" style="color:#888;font-size:11px;">◈</div>
+                    <div class="dom-scenario-text">
+                        <strong>Risk &gt; 25% — Internal fractures.</strong>
+                        Fragments drawn in the dominant variable's own shape —
+                        arcs if temperature dominates, curves if wind dominates,
+                        thin rectangles if pressure dominates — appear scattered across the canvas
+                        in the event's color. The future breaks through the present.
+                    </div>
+                </div>
+                <div class="dom-scenario">
+                    <div class="dom-scenario-icon" style="color:#888;font-size:11px;">□</div>
+                    <div class="dom-scenario-text">
+                        <strong>Risk &gt; 75% — Double alert border.</strong>
+                        A wide diffuse rectangle plus a sharp inner frame enclose the entire painting.
+                        The canvas is contained, under pressure, about to break.
+                    </div>
+                </div>
+                <div class="dom-scenario">
+                    <div class="dom-scenario-icon" style="color:#888;font-size:11px;">◎</div>
+                    <div class="dom-scenario-text">
+                        <strong>Risk &gt; 85% — Radial focal points.</strong>
+                        Glowing diffuse patches in the event's color contaminate the background gradient.
+                        The light source of the painting shifts toward the danger.
+                    </div>
+                </div>
+            </div>
+
+            <p style="margin-top: 16px;">
+                Event colors are fixed: <strong style="color:#c04018">heat → red-orange</strong> ·
+                <strong style="color:#3060b0">cold → steel blue</strong> ·
+                <strong style="color:#309060">wind → green-teal</strong> ·
+                <strong style="color:#3070a0">rain → slate blue</strong>.
+                These colors never appear in the base grammar, so any tint in those hues is a signal —
+                not climate description, but prediction bleeding through.
+            </p>
+        </div>
+
+        <!-- ── Not a visualization ─────────────────────────────── -->
+        <div class="section">
+            <h2>What this is — and what it isn't</h2>
+            <div class="distinction">
+                <div class="distinction-col no">
+                    <div class="distinction-label">Not this</div>
+                    <div class="distinction-item">A chart with climate data</div>
+                    <div class="distinction-item">A decorative weather widget</div>
+                    <div class="distinction-item">AI-generated art with no rules</div>
+                    <div class="distinction-item">A dashboard</div>
+                    <div class="distinction-item">Random generative noise</div>
+                </div>
+                <div class="distinction-col yes">
+                    <div class="distinction-label">This</div>
+                    <div class="distinction-item">A visual language for data</div>
+                    <div class="distinction-item">Every form traceable to a datum</div>
+                    <div class="distinction-item">Deterministic and reproducible</div>
+                    <div class="distinction-item">An autonomous ML system</div>
+                    <div class="distinction-item">A live, growing archive</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Stack ───────────────────────────────────────────── -->
         <div class="section">
             <h2>Stack</h2>
             <div>
@@ -393,23 +723,25 @@
                 <span class="tag">OpenWeatherMap API</span>
                 <span class="tag">HTML5 Canvas</span>
                 <span class="tag">JavaScript</span>
+                <span class="tag">Playwright</span>
                 <span class="tag">GitHub Actions</span>
                 <span class="tag">GitHub Pages</span>
             </div>
         </div>
 
+        <!-- ── Author ──────────────────────────────────────────── -->
         <div class="section">
             <h2>Author</h2>
             <p>
-                Project developed as a central portfolio piece by a
+                Developed as a central portfolio piece by a
                 <strong>recently graduated software engineer</strong> moving toward
                 Machine Learning Engineering. Seville, 2026.
             </p>
             <p>
-                The project demonstrates the ability to build real data pipelines
-                with external APIs, design feature engineering systems for time series,
-                train and evaluate classification models, and produce outputs that go
-                beyond the typical Jupyter notebook.
+                The project demonstrates the ability to build real data pipelines with external APIs,
+                design feature engineering systems for time series, train and evaluate classification models,
+                and produce outputs that go beyond the typical Jupyter notebook — a complete,
+                autonomous ML system running in production.
             </p>
         </div>
     </div>
@@ -421,6 +753,40 @@
             <a href="technical.html">Technical</a>
         </span>
     </footer>
+
+    <script>
+        // ── Animated variable bars demo ─────────────────────────────────────
+        const vars = [
+            { name: 'presion', val: 0.60, color: 'hsl(38,58%,50%)', label: '60%' },
+            { name: 'temperatura', val: 0.43, color: 'hsl(28,80%,50%)', label: '43%' },
+            { name: 'humedad', val: 0.38, color: 'hsl(150,55%,44%)', label: '38%' },
+            { name: 'viento', val: 0.31, color: 'hsl(215,65%,50%)', label: '31%' },
+            { name: 'nubes', val: 0.00, color: 'hsl(210,30%,58%)', label: '0%' },
+            { name: 'pm25', val: 0.06, color: 'hsl(285,45%,48%)', label: '6%' },
+        ];
+
+        const container = document.getElementById('var-demo');
+        vars.forEach((v, i) => {
+            const row = document.createElement('div');
+            row.className = 'var-row';
+            const isDom = i === 0;
+            row.innerHTML = `
+            <div class="var-name" style="color:${isDom ? '#2a2520' : ''}">${isDom ? '▶ ' : ''}${v.name}</div>
+            <div class="var-bar-wrap">
+                <div class="var-bar" data-w="${v.val * 100}"
+                     style="width:0%;background:${v.color};opacity:${isDom ? 1 : 0.4};transition:width .8s ease ${i * 0.08}s"></div>
+            </div>
+            <div class="var-label">${v.label}</div>`;
+            container.appendChild(row);
+        });
+
+        // Animate on load
+        setTimeout(() => {
+            document.querySelectorAll('.var-bar').forEach(b => {
+                b.style.width = b.dataset.w + '%';
+            });
+        }, 200);
+    </script>
 
 </body>
 
