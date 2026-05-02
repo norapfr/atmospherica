@@ -1,3 +1,4 @@
+from pathlib import Path
 import sys
 import os
 import argparse
@@ -41,15 +42,19 @@ if __name__ == "__main__":
     visual["dominant"]         = dominant
     visual["dominant_strength"] = dom_strength
     visual["dominant2"]        = dominant2
-
+    FEATURES_ALL = Path("ml/data_todo/featuresAll.csv")
     # ── Prediccion ML ─────────────────────────────────────────
     print("\nPrediccion ML...")
     predictor = AtmosphericPredictor()
 
     if predictor.is_ready():
         features_today = build_features_from_history()
+    
+
         if features_today is not None:
             prediction = predictor.predict_from_history_df(features_today)
+        elif FEATURES_ALL.exists():
+            prediction = predictor.predict_from_history(str(FEATURES_ALL))
         else:
             prediction = predictor.predict(data)
         print(f"  Riesgo evento manana: {prediction['risk_score']:.1%}")
