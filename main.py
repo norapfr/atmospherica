@@ -72,7 +72,10 @@ if __name__ == "__main__":
     html_path = generate_html(visual)[0]
 
     # ── Exportar PNG con Playwright (siempre) ─────────────────
-    now      = datetime.now()
+    from datetime import datetime
+    import zoneinfo
+
+    now = datetime.now(zoneinfo.ZoneInfo("Europe/Madrid"))
     city     = data["city"].replace(" ", "_")
     png_name = f"atmospherica_{city}_{now.strftime('%Y-%m-%d')}_{now.hour:02d}h.png"
     png_path = os.path.join("docs", "output", png_name)
