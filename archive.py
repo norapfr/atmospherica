@@ -6,12 +6,12 @@ from pathlib import Path
 from datetime import datetime
 
 
-ARCHIVE_PATH = Path("web/data/archive.json")
+ARCHIVE_PATH = Path("docs/data/archive.json")
 
 
 def update_archive(visual_params: dict, image_path: str):
     """
-    Añade la entrada del cuadro de hoy a web/data/archive.json.
+    Añade la entrada del cuadro de hoy a docs/data/archive.json.
     Si ya existe una entrada para esta fecha+hora la sobreescribe.
 
     image_path: ruta relativa al PNG desde la raíz del repo,

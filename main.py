@@ -70,10 +70,10 @@ if __name__ == "__main__":
     now      = datetime.now()
     city     = data["city"].replace(" ", "_")
     png_name = f"atmospherica_{city}_{now.strftime('%Y-%m-%d')}_{now.hour:02d}h.png"
-    png_path = os.path.join("output", png_name)
-    png_web  = f"../output/{png_name}"
+    png_path = os.path.join("docs", "output", png_name)
+    png_web  = f"output/{png_name}"
 
-    os.makedirs("output", exist_ok=True)
+    os.makedirs("docs/output", exist_ok=True)
 
     print("\nExportando PNG...")
     from playwright.sync_api import sync_playwright
