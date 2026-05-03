@@ -131,7 +131,70 @@
             font-weight: normal;
         }
 
-        /* ── Summary metrics ────────────────────────────────── */
+        /* ── Model comparison grid ── */
+        .model-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .model-card {
+            border: 1px solid var(--border);
+            padding: 18px;
+        }
+
+        .model-card-label {
+            font-size: 7px;
+            letter-spacing: .22em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .model-card-name {
+            font-size: 11px;
+            letter-spacing: .08em;
+            color: var(--text);
+            margin-bottom: 12px;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 5px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-size: 7.5px;
+            letter-spacing: .1em;
+            color: var(--muted);
+        }
+
+        .metric-val {
+            font-size: 11px;
+            color: var(--text);
+        }
+
+        .metric-val.good {
+            color: #4a7a4a;
+        }
+
+        .metric-val.mid {
+            color: #8a6a28;
+        }
+
+        .metric-val.low {
+            color: #8a3828;
+        }
+
+        /* ── Summary bar metrics ── */
         .metrics-summary {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -168,7 +231,7 @@
             color: #8a6a28;
         }
 
-        /* ── Folds table ────────────────────────────────────── */
+        /* ── Tables ── */
         .folds-table {
             width: 100%;
             border-collapse: collapse;
@@ -202,7 +265,7 @@
             border-top: 1px solid var(--border);
         }
 
-        /* ── Feature importance ─────────────────────────────── */
+        /* ── Feature importance ── */
         .feat-list {
             margin: 24px 0;
         }
@@ -243,7 +306,48 @@
             text-align: left;
         }
 
-        /* ── Pipeline ───────────────────────────────────────── */
+        /* ── Training curves ── */
+        .curve-wrap {
+            margin: 24px 0;
+            border: 1px solid var(--border);
+            padding: 20px 20px 10px;
+        }
+
+        .curve-label {
+            font-size: 7.5px;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 14px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 140px;
+            display: block;
+        }
+
+        .curve-legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .curve-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 7.5px;
+            letter-spacing: .1em;
+            color: var(--muted);
+        }
+
+        .curve-legend-dot {
+            width: 14px;
+            height: 2px;
+        }
+
+        /* ── Pipeline ── */
         .pipeline {
             margin: 24px 0;
         }
@@ -281,7 +385,7 @@
             margin: 0;
         }
 
-        /* ── Code block ─────────────────────────────────────── */
+        /* ── Code ── */
         .code-block {
             background: var(--off);
             border: 1px solid var(--border);
@@ -311,7 +415,7 @@
             color: #2a2520;
         }
 
-        /* ── Notice ─────────────────────────────────────────── */
+        /* ── Notice ── */
         .notice {
             border: 1px solid var(--border);
             padding: 14px 16px;
@@ -332,7 +436,7 @@
             margin: 0;
         }
 
-        /* ── History timeline ───────────────────────────────── */
+        /* ── History timeline ── */
         .history-timeline {
             margin: 20px 0;
         }
@@ -368,7 +472,7 @@
             font-weight: normal;
         }
 
-        /* ── Tag ────────────────────────────────────────────── */
+        /* ── Tags ── */
         .tag {
             display: inline-block;
             background: var(--off);
@@ -411,6 +515,10 @@
                 padding: 48px 20px 80px;
             }
 
+            .model-grid {
+                grid-template-columns: 1fr;
+            }
+
             .metrics-summary {
                 grid-template-columns: repeat(2, 1fr);
             }
@@ -442,50 +550,92 @@
         <div class="page-label">ML model &amp; data pipeline</div>
         <h1>Predicting extreme<br>atmospheric events.</h1>
         <div class="subtitle">
-            Random Forest trained on ERA5 reanalysis data (Copernicus) spanning two periods:
-            1940–1990 and 2010–2024, grid centred on Seville. Binary target: will there be an
-            extreme weather event tomorrow? Evaluated with time-series aware 5-fold cross-validation.
+            Two models trained on ERA5 reanalysis data (Copernicus), covering 1940–1990
+            and 2010–2024, grid centred on Seville. Binary target: extreme weather event
+            tomorrow. The Random Forest serves as the production predictor.
+            The LSTM was trained as a sequence-aware baseline.
         </div>
 
-        <!-- ── Summary metrics ──────────────────────────────────── -->
+        <!-- ── Model comparison ──────────────────────────────── -->
         <div class="section">
-            <h2>Model at a glance</h2>
-            <div class="metrics-summary">
-                <div class="metric-cell">
-                    <div class="metric-cell-label">Mean AUC</div>
-                    <div class="metric-cell-val good">0.836</div>
+            <h2>Model comparison</h2>
+            <p>
+                Both architectures were evaluated on the same dataset.
+                The <strong>Random Forest</strong> serves as the production predictor due to
+                its superior AUC, simpler feature requirements, and no need for sequence
+                context at inference time. The <strong>LSTM</strong> was trained as a
+                sequence-aware baseline on 17 raw and derived physical features,
+                without the full 39-feature set used by the RF.
+            </p>
+            <div class="model-grid">
+                <div class="model-card">
+                    <div class="model-card-label">Production</div>
+                    <div class="model-card-name">Random Forest</div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mean AUC (5-fold CV)</span>
+                        <span class="metric-val good">0.836</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Mean F1 (5-fold CV)</span>
+                        <span class="metric-val mid">0.149</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Features</span>
+                        <span class="metric-val">39</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Training samples</span>
+                        <span class="metric-val">5,472</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Event rate</span>
+                        <span class="metric-val">5.0%</span>
+                    </div>
                 </div>
-                <div class="metric-cell">
-                    <div class="metric-cell-label">Mean F1</div>
-                    <div class="metric-cell-val mid">0.149</div>
-                </div>
-                <div class="metric-cell">
-                    <div class="metric-cell-label">Features</div>
-                    <div class="metric-cell-val">39</div>
-                </div>
-                <div class="metric-cell">
-                    <div class="metric-cell-label">Event rate</div>
-                    <div class="metric-cell-val">5.0%</div>
+                <div class="model-card">
+                    <div class="model-card-label">Baseline</div>
+                    <div class="model-card-name">AtmosphericLSTM</div>
+                    <div class="metric-row">
+                        <span class="metric-label">Test ROC-AUC</span>
+                        <span class="metric-val mid">0.678</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Test F1 (th=0.38)</span>
+                        <span class="metric-val low">0.135</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Sequence length</span>
+                        <span class="metric-val">14 days</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Parameters</span>
+                        <span class="metric-val">127,169</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Epochs (early stop)</span>
+                        <span class="metric-val">40 / 150</span>
+                    </div>
                 </div>
             </div>
             <div class="notice">
-                <div class="notice-label">On the F1 score</div>
-                <p>The low F1 (0.149) is expected given the 5.0% event rate — strong class imbalance.
-                    The model uses <code style="font-size:8px">class_weight="balanced_subsample"</code>
-                    and is evaluated on threshold-tuned predictions. AUC (0.836) is the primary metric:
-                    it measures discriminative ability independent of threshold and class distribution.
-                    The model reliably separates high-risk days from low-risk ones — which is what
-                    matters for the visual alarm system embedded in each painting.</p>
+                <div class="notice-label">Why the RF wins</div>
+                <p>The LSTM trained on 17 physical features (raw + rolling + gradients) achieves
+                    AUC 0.678 vs. 0.836 for the RF on 39 features. The gap is expected:
+                    the RF receives pre-computed 7-day rolling means, 3-day lags, and
+                    a dry index specifically tuned for Seville's climate — temporal
+                    context that the LSTM must reconstruct from raw sequences. With 24k days
+                    of training data the LSTM saturates quickly. The AUC-PR plateaued
+                    at epoch 14 and early stopping triggered at epoch 40.</p>
             </div>
         </div>
 
-        <!-- ── Cross-validation ──────────────────────────────────── -->
+        <!-- ── RF cross-validation ───────────────────────────── -->
         <div class="section">
-            <h2>Cross-validation results</h2>
+            <h2>Random Forest — cross-validation</h2>
             <p>
                 Time-series aware 5-fold cross-validation (TimeSeriesSplit). Folds are strictly
-                sequential — no data from the future leaks into any training window.
-                The <strong>event rate is 5.0%</strong>, addressed with
+                sequential — no future data leaks into any training window. The
+                <strong>event rate is 5.0%</strong>, addressed with
                 <code style="font-size:8px">class_weight='balanced_subsample'</code>
                 across 400 estimators.
             </p>
@@ -531,35 +681,153 @@
                 </tbody>
             </table>
             <p>
-                AUC improves in later folds (0.773 → 0.888), consistent with the model learning
-                Seville's seasonal extreme patterns more reliably as the training window grows.
-                F1 variance is high due to threshold sensitivity under strong class imbalance;
-                the threshold is tuned per deployment context.
+                AUC improves in later folds (0.773 → 0.886), consistent with the model
+                learning Seville's seasonal extreme patterns more reliably as the training
+                window grows. Low F1 is expected at 5% event rate under strong class imbalance —
+                AUC 0.836 is the operative metric.
             </p>
         </div>
 
-        <!-- ── Feature importance ───────────────────────────────── -->
+        <!-- ── RF feature importance ─────────────────────────── -->
         <div class="section">
-            <h2>Feature importance — top 10 (SHAP)</h2>
+            <h2>RF feature importance — top 10 (SHAP)</h2>
             <p>
-                Mean absolute SHAP values computed over 200 training samples via TreeExplainer.
-                <strong>Minimum daily pressure</strong> ranks first — sharp pressure drops are the
-                clearest precursor of incoming frontal systems. <strong>Temperature maximum</strong>
-                ranks second, directly defining heat and cold event thresholds.
-                <strong>Cosine day-of-year</strong> ranks third, confirming that Seville's extreme
-                event distribution is strongly seasonal.
+                Mean absolute SHAP values via TreeExplainer over 200 training samples.
+                <strong>Minimum daily pressure</strong> ranks first — sharp pressure drops
+                are the clearest precursor of frontal systems. <strong>Temperature maximum</strong>
+                ranks second, directly defining heat and cold thresholds.
+                <strong>Cosine day-of-year</strong> ranks third, confirming strong seasonality.
             </p>
             <div class="feat-list" id="feat-list"></div>
             <p>
-                The <strong>dry index</strong> (thermal range × (100 − mean humidity)) appears as
-                a composite proxy for the conditions preceding Seville's most dangerous summer heat events:
-                wide diurnal temperature swings combined with very low humidity.
+                The <strong>dry index</strong> (thermal range × (100 − mean humidity)) is the
+                most Seville-specific feature: wide diurnal swings with very low humidity
+                are the signature precondition for the city's most dangerous heat events.
             </p>
         </div>
 
-        <!-- ── RF configuration ──────────────────────────────────── -->
+        <!-- ── LSTM architecture ─────────────────────────────── -->
         <div class="section">
-            <h2>Model configuration</h2>
+            <h2>LSTM architecture</h2>
+            <p>
+                Two-layer LSTM with LayerNorm and a GELU MLP head. LayerNorm was chosen
+                over BatchNorm for stability with short sequences and variable batch sizes.
+                Focal Loss (α=0.80, γ=1.5) shifts gradient weight toward the rare positive class.
+                Trained with AdamW (lr=1×10⁻⁴) and cosine annealing.
+            </p>
+            <div class="code-block">
+                <pre><span class="cm"># AtmosphericLSTM — forward pass</span>
+Input  →  (batch, <span class="nm">14</span>, <span class="nm">17</span>)          <span class="cm"># 14-day window × 17 features</span>
+LSTM₁  →  hidden=<span class="nm">128</span>               <span class="cm"># short-range synoptic patterns</span>
+LSTM₂  →  hidden=<span class="nm">64</span>                <span class="cm"># regime-level compression</span>
+LayerNorm  →  (batch, <span class="nm">64</span>)          <span class="cm"># last timestep only</span>
+Linear(<span class="nm">64</span>→<span class="nm">32</span>) + GELU + Dropout(<span class="nm">0.25</span>)
+Linear(<span class="nm">32</span>→<span class="nm">1</span>)  + Sigmoid         <span class="cm"># P(extreme event tomorrow)</span></pre>
+            </div>
+
+            <!-- LSTM training curve -->
+            <div class="curve-wrap" style="margin-top:20px;">
+                <div class="curve-label">LSTM — validation metrics per epoch</div>
+                <canvas id="curve" width="600" height="140"></canvas>
+                <div class="curve-legend">
+                    <div class="curve-legend-item">
+                        <div class="curve-legend-dot" style="background:#2a2520"></div>
+                        ROC-AUC
+                    </div>
+                    <div class="curve-legend-item">
+                        <div class="curve-legend-dot" style="background:#999690"></div>
+                        AUC-PR
+                    </div>
+                    <div class="curve-legend-item">
+                        <div class="curve-legend-dot" style="background:#c8c0b0; border-top:1px dashed #999;"></div>
+                        F1
+                    </div>
+                </div>
+            </div>
+            <p style="margin-top:12px;">
+                Early stopping triggered at epoch 40 (patience 25 on AUC-PR).
+                AUC-PR peaked at epoch 14 (0.121) and did not improve further,
+                while ROC-AUC continued rising slowly. This plateau is characteristic
+                of Focal Loss on highly imbalanced data: once the model stops
+                finding new positive examples to focus on, the precision-recall
+                curve saturates.
+            </p>
+        </div>
+
+        <!-- ── ERA5 data pipeline ─────────────────────────────── -->
+        <div class="section">
+            <h2>ERA5 data pipeline</h2>
+            <p>
+                The dataset covers two periods: <strong>1940–1990</strong>
+                (51 years of pre-industrial and early-industrial baseline) and
+                <strong>2010–2024</strong> (15 years of contemporary climate with
+                documented warming trend). This split allows the model to learn both
+                long-run climatological distributions and the contemporary extreme event shift.
+            </p>
+            <div class="pipeline">
+                <div class="pipeline-step">
+                    <div class="step-num">01</div>
+                    <div class="step-content">
+                        <h3>Download</h3>
+                        <p>Copernicus CDS API via <code style="font-size:8px">cdsapi</code>. 7 variables
+                            at 06:00 / 12:00 / 18:00 UTC. Area: 38°N–36.5°N, 6.5°W–5°W.
+                            Two NetCDF4 series — instantaneous (temp, pressure, wind, dewpoint)
+                            and accumulated (precipitation, cloud cover).</p>
+                    </div>
+                </div>
+                <div class="pipeline-step">
+                    <div class="step-num">02</div>
+                    <div class="step-content">
+                        <h3>Physical conversion &amp; daily aggregation</h3>
+                        <p>K → °C · Pa → hPa · precipitation diff × 1000 (m→mm) ·
+                            wind → speed via √(u²+v²) · humidity from dewpoint via Magnus formula.
+                            Resampled to daily: T<sub>max</sub>, T<sub>min</sub>, T<sub>mean</sub>,
+                            P<sub>mean</sub>, P<sub>min</sub>, wind<sub>max/mean</sub>,
+                            precip<sub>sum</sub>, humidity<sub>max/mean</sub>, cloud<sub>mean</sub>.</p>
+                    </div>
+                </div>
+                <div class="pipeline-step">
+                    <div class="step-num">03</div>
+                    <div class="step-content">
+                        <h3>Bias correction</h3>
+                        <p>ERA5 underestimates T<sub>max</sub> in Seville by ~2.5°C due to the 1.5° grid
+                            resolution. A constant +2.5°C correction is applied to all temperature
+                            fields before feature engineering and label thresholding.</p>
+                    </div>
+                </div>
+                <div class="pipeline-step">
+                    <div class="step-num">04</div>
+                    <div class="step-content">
+                        <h3>Feature engineering</h3>
+                        <p><strong>RF (39 features):</strong> raw daily aggregates · 3/7-day rolling means ·
+                            1/2/3-day lags · pressure and temperature gradients · sin/cos seasonality ·
+                            thermal range, heat intensity, pressure deficit, humidity range,
+                            wind spike, dry index, normalized pressure.<br>
+                            <strong>LSTM (17 features):</strong> 9 raw physical variables + 8 derived:
+                            temp_ma3/ma7, pressure_ma3, pressure_grad, wind_speed, wind_ma3,
+                            precip_ma3, dry_index. Scaled with StandardScaler fitted on train
+                            days only — before sequence construction to avoid overlap bias.
+                        </p>
+                    </div>
+                </div>
+                <div class="pipeline-step">
+                    <div class="step-num">05</div>
+                    <div class="step-content">
+                        <h3>Label definition</h3>
+                        <p>Binary target: extreme event tomorrow (shift −1 day). Triggers:
+                            <strong>heat</strong> T<sub>max</sub> ≥ 38°C ·
+                            <strong>cold</strong> T<sub>max</sub> ≤ 10°C ·
+                            <strong>wind</strong> ≥ 8 m/s ·
+                            <strong>rain</strong> ≥ 1 mm/day. OR logic. Event rate: 5.0%.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── RF configuration ──────────────────────────────── -->
+        <div class="section">
+            <h2>RF configuration</h2>
             <div class="code-block">
                 <pre><span class="nm">RandomForestClassifier</span>(
     n_estimators=<span class="nm">400</span>,
@@ -571,146 +839,52 @@
 )</pre>
             </div>
             <p>
-                <code style="font-size:8px">balanced_subsample</code> recomputes class weights for each
-                bootstrap sample independently — better-calibrated than the global
-                <code style="font-size:8px">balanced</code> option on highly imbalanced datasets.
-                No feature scaling is applied — Random Forest is scale-invariant.
-                The feature list is saved alongside the model (<code style="font-size:8px">features.pkl</code>)
-                to guarantee column order consistency between training and inference.
+                No feature scaling — RF is scale-invariant. The feature list is saved to
+                <code style="font-size:8px">features.pkl</code> alongside the model to guarantee
+                column order consistency at inference time.
             </p>
         </div>
 
-        <!-- ── ERA5 data pipeline ─────────────────────────────────── -->
-        <div class="section">
-            <h2>ERA5 data pipeline</h2>
-            <p>
-                The dataset covers two distinct historical periods: <strong>1940–1990</strong>
-                (50 years of pre-industrial and early-industrial baseline climate) and
-                <strong>2010–2024</strong> (recent climate with confirmed warming trend).
-                This split allows the model to learn both long-run climatological patterns
-                and the distributional shifts of contemporary extreme events.
-            </p>
-            <div class="pipeline">
-                <div class="pipeline-step">
-                    <div class="step-num">01</div>
-                    <div class="step-content">
-                        <h3>Reanalysis download</h3>
-                        <p>Copernicus CDS API via <code style="font-size:8px">cdsapi</code>. 7 variables
-                            at 06:00 / 12:00 / 18:00 UTC across both periods.
-                            Area: 38°N–36.5°N, 6.5°W–5°W (bounding box around Seville).
-                            Two NetCDF4 series per year — instantaneous (temperature, pressure,
-                            wind components, dewpoint) and accumulated (precipitation, cloud cover).</p>
-                    </div>
-                </div>
-                <div class="pipeline-step">
-                    <div class="step-num">02</div>
-                    <div class="step-content">
-                        <h3>Physical conversion &amp; daily aggregation</h3>
-                        <p>K → °C · Pa → hPa · precipitation diff × 1000 (m → mm) ·
-                            wind components → speed via √(u² + v²) ·
-                            humidity from dewpoint via Magnus formula.
-                            Spatial mean over the bounding box. Resampled to daily:
-                            T<sub>max</sub>, T<sub>min</sub>, T<sub>mean</sub>,
-                            P<sub>mean</sub>, P<sub>min</sub>, wind<sub>max</sub>,
-                            wind<sub>mean</sub>, precip<sub>sum</sub>, humidity<sub>max</sub>,
-                            humidity<sub>mean</sub>, cloud<sub>mean</sub>.</p>
-                    </div>
-                </div>
-                <div class="pipeline-step">
-                    <div class="step-num">03</div>
-                    <div class="step-content">
-                        <h3>Bias correction</h3>
-                        <p>ERA5 systematically underestimates daily T<sub>max</sub> in Seville by ~2.5°C,
-                            a known artifact of the 1.5° grid resolution in a city surrounded by low terrain.
-                            A constant additive correction (+2.5°C) is applied to all temperature fields
-                            before feature engineering and before label thresholding.</p>
-                    </div>
-                </div>
-                <div class="pipeline-step">
-                    <div class="step-num">04</div>
-                    <div class="step-content">
-                        <h3>Feature engineering — 39 features</h3>
-                        <p>
-                            Raw daily aggregates (11) ·
-                            3-day and 7-day rolling means for temperature, pressure, wind, humidity (8) ·
-                            1/2/3-day lags for temperature, precipitation, wind (9) ·
-                            first-order gradients for temperature and pressure (2) ·
-                            day-of-year sine/cosine seasonality (2) ·
-                            derived composites: thermal range, heat intensity, pressure deficit,
-                            humidity range, wind spike, dry index, normalized pressure (7).
-                        </p>
-                    </div>
-                </div>
-                <div class="pipeline-step">
-                    <div class="step-num">05</div>
-                    <div class="step-content">
-                        <h3>Label definition</h3>
-                        <p>Binary target: extreme event tomorrow (shift −1 day). Four triggers —
-                            <strong>heat</strong> (T<sub>max</sub> ≥ 38°C, AEMET heat wave criterion) ·
-                            <strong>cold</strong> (T<sub>max</sub> ≤ 10°C) ·
-                            <strong>wind</strong> (speed ≥ 8 m/s) ·
-                            <strong>rain</strong> (precip ≥ 1 mm/day).
-                            OR logic across all four. Event rate: 5.0% of days.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ── Production inference ──────────────────────────────── -->
+        <!-- ── Production inference ──────────────────────────── -->
         <div class="section">
             <h2>Production inference</h2>
             <p>
-                The model was trained on features that require temporal context — rolling means,
-                lags, gradients. A single API snapshot cannot provide these. The system accumulates
-                one daily record in a CSV that persists in the repository, building real feature
-                vectors progressively. When no local history exists, it falls back to the last
-                available ERA5 observation.
+                The RF requires temporal features (rolling means, lags) that cannot be
+                computed from a single API snapshot. The system accumulates one daily record
+                per calendar day in a CSV committed to the repository.
             </p>
             <div class="history-timeline">
                 <div class="history-row">
                     <div class="history-days">Day 0</div>
-                    <div class="history-desc">
-                        No history. <strong>Fallback to ERA5 CSV</strong> — the last observed day
-                        from the training dataset is used as the feature vector.
-                    </div>
+                    <div class="history-desc"><strong>Fallback to ERA5.</strong> The last observed day in the training
+                        CSV is used as the feature vector.</div>
                 </div>
                 <div class="history-row">
                     <div class="history-days">Days 1–6</div>
-                    <div class="history-desc">
-                        Partial history. Rolling means use <code style="font-size:8px">min_periods=1</code>
-                        — functional from day 1, improving progressively.
-                        <strong>Lag features partially filled</strong> with current value as proxy.
-                    </div>
+                    <div class="history-desc">Rolling means computed with <code
+                            style="font-size:8px">min_periods=1</code>. Lag features partially filled with current value
+                        as proxy.</div>
                 </div>
                 <div class="history-row">
                     <div class="history-days">Day 7+</div>
-                    <div class="history-desc">
-                        <strong>Rolling means fully real</strong> (ma3 and ma7).
-                        Pressure and temperature gradients computed from actual observed history.
-                    </div>
+                    <div class="history-desc"><strong>Rolling means fully real</strong> (ma3 and ma7). Gradients from
+                        observed history.</div>
                 </div>
                 <div class="history-row">
                     <div class="history-days">Day 14+</div>
-                    <div class="history-desc">
-                        <strong>All lag features complete.</strong> Feature vector is equivalent
-                        to training conditions. Full prediction quality.
-                    </div>
+                    <div class="history-desc"><strong>All lags complete.</strong> Feature vector equivalent to training
+                        conditions.</div>
                 </div>
             </div>
-            <p>
-                Three daily API calls (08h, 12h, 20h) aggregate into a single daily record.
-                Deduplication logic ensures exactly one row per calendar day regardless of
-                how many times the workflow runs — matching the ERA5 daily frequency used in training.
-            </p>
         </div>
 
-        <!-- ── Stack ─────────────────────────────────────────────── -->
+        <!-- ── Stack ─────────────────────────────────────────── -->
         <div class="section">
             <h2>Stack</h2>
             <div>
                 <span class="tag">Python 3.11</span>
                 <span class="tag">scikit-learn</span>
+                <span class="tag">PyTorch</span>
                 <span class="tag">shap</span>
                 <span class="tag">xarray</span>
                 <span class="tag">ERA5 / Copernicus CDS</span>
@@ -728,13 +902,11 @@
 
     <footer>
         <span>ATMOSPHERICA — Seville, 2026</span>
-        <span>
-            <a href="index.html">Exhibition</a> &nbsp;·&nbsp;
-            <a href="about.html">Project</a>
-        </span>
+        <span><a href="index.html">Exhibition</a> &nbsp;·&nbsp; <a href="about.html">Project</a></span>
     </footer>
 
     <script>
+        // ── RF Feature importance (real SHAP values) ─────────────────────────
         const features = [
             ["pressure_hpa_min", 0.03239],
             ["temp_c_max", 0.02846],
@@ -747,29 +919,104 @@
             ["wind_speed_mean", 0.01552],
             ["dry_index", 0.01532],
         ];
-
         const maxVal = features[0][1];
         const list = document.getElementById('feat-list');
-
         features.forEach(([name, val], i) => {
             const pct = (val / maxVal * 100).toFixed(0);
             const div = document.createElement('div');
             div.className = 'feat-row';
             div.innerHTML = `
-            <div class="feat-name">${name}</div>
-            <div class="feat-bar-wrap">
-                <div class="feat-bar" style="width:0%" data-w="${pct}" data-delay="${i * 60}"></div>
-            </div>
-            <div class="feat-pct">SHAP ${(val * 100).toFixed(3)}%</div>`;
+        <div class="feat-name">${name}</div>
+        <div class="feat-bar-wrap">
+            <div class="feat-bar" style="width:0%" data-w="${pct}" data-delay="${i * 60}"></div>
+        </div>
+        <div class="feat-pct">SHAP ${(val * 100).toFixed(3)}%</div>`;
             list.appendChild(div);
         });
-
         setTimeout(() => {
             document.querySelectorAll('.feat-bar').forEach(b => {
-                setTimeout(() => { b.style.width = b.dataset.w + '%'; },
-                    parseInt(b.dataset.delay));
+                setTimeout(() => { b.style.width = b.dataset.w + '%'; }, parseInt(b.dataset.delay));
             });
         }, 100);
+
+        // ── LSTM training curve (real history from lstm_metrics.json) ─────────
+        const history = [
+            { epoch: 1, roc: 0.6583, auc_pr: 0.1195, f1: 0.0000 },
+            { epoch: 2, roc: 0.6826, auc_pr: 0.1177, f1: 0.0000 },
+            { epoch: 3, roc: 0.6967, auc_pr: 0.1159, f1: 0.0000 },
+            { epoch: 4, roc: 0.7024, auc_pr: 0.1196, f1: 0.0156 },
+            { epoch: 5, roc: 0.7042, auc_pr: 0.1189, f1: 0.0156 },
+            { epoch: 6, roc: 0.7039, auc_pr: 0.1193, f1: 0.0153 },
+            { epoch: 7, roc: 0.7062, auc_pr: 0.1155, f1: 0.0153 },
+            { epoch: 8, roc: 0.7058, auc_pr: 0.1133, f1: 0.0150 },
+            { epoch: 9, roc: 0.7062, auc_pr: 0.1201, f1: 0.0154 },
+            { epoch: 10, roc: 0.7068, auc_pr: 0.1169, f1: 0.0150 },
+            { epoch: 11, roc: 0.7108, auc_pr: 0.1185, f1: 0.0294 },
+            { epoch: 12, roc: 0.7087, auc_pr: 0.1188, f1: 0.0292 },
+            { epoch: 13, roc: 0.7071, auc_pr: 0.1177, f1: 0.0292 },
+            { epoch: 14, roc: 0.7093, auc_pr: 0.1212, f1: 0.0294 },  // best AUC-PR
+            { epoch: 15, roc: 0.7092, auc_pr: 0.1213, f1: 0.0571 },  // best AUC-PR
+            { epoch: 16, roc: 0.7089, auc_pr: 0.1205, f1: 0.0576 },
+            { epoch: 17, roc: 0.7102, auc_pr: 0.1211, f1: 0.0576 },
+            { epoch: 18, roc: 0.7098, auc_pr: 0.1192, f1: 0.0576 },
+            { epoch: 19, roc: 0.7110, auc_pr: 0.1162, f1: 0.0828 },
+            { epoch: 20, roc: 0.7117, auc_pr: 0.1187, f1: 0.0851 },
+            { epoch: 25, roc: 0.7116, auc_pr: 0.1155, f1: 0.0822 },
+            { epoch: 30, roc: 0.7090, auc_pr: 0.1088, f1: 0.0848 },
+            { epoch: 35, roc: 0.7060, auc_pr: 0.1081, f1: 0.0745 },
+            { epoch: 40, roc: 0.7002, auc_pr: 0.1035, f1: 0.0690 },
+        ];
+
+        const canvas = document.getElementById('curve');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = canvas.offsetWidth * dpr;
+        canvas.height = canvas.offsetHeight * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const W = canvas.offsetWidth, H = canvas.offsetHeight;
+        const PAD = { top: 10, right: 20, bottom: 24, left: 34 };
+        const cW = W - PAD.left - PAD.right;
+        const cH = H - PAD.top - PAD.bottom;
+        const minY = 0.00, maxY = 0.78;
+        const maxEp = 40;
+
+        const toX = ep => PAD.left + ((ep - 1) / (maxEp - 1)) * cW;
+        const toY = v => PAD.top + cH - ((v - minY) / (maxY - minY)) * cH;
+
+        // Grid
+        ctx.strokeStyle = '#e8e4de'; ctx.lineWidth = 0.5;
+        [0.2, 0.4, 0.6].forEach(v => {
+            const y = toY(v);
+            ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
+            ctx.fillStyle = '#999690';
+            ctx.font = `7px 'Courier New'`;
+            ctx.textAlign = 'right';
+            ctx.fillText(v.toFixed(1), PAD.left - 5, y + 3);
+        });
+        [1, 10, 15, 20, 30, 40].forEach(e => {
+            ctx.fillStyle = '#999690'; ctx.textAlign = 'center';
+            ctx.fillText(e, toX(e), H - PAD.bottom + 14);
+        });
+        ctx.fillText('epoch', W / 2, H - 2);
+
+        function drawLine(key, color, dash = []) {
+            ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash(dash);
+            history.forEach((d, i) => {
+                const x = toX(d.epoch), y = toY(d[key]);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            });
+            ctx.stroke(); ctx.setLineDash([]);
+        }
+        drawLine('roc', '#2a2520');
+        drawLine('auc_pr', '#999690');
+        drawLine('f1', '#c8c0b0', [3, 3]);
+
+        // Best AUC-PR marker (epoch 15)
+        ctx.strokeStyle = '#aaa'; ctx.lineWidth = 0.8; ctx.setLineDash([2, 3]);
+        ctx.beginPath(); ctx.moveTo(toX(15), PAD.top); ctx.lineTo(toX(15), PAD.top + cH);
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#999690'; ctx.textAlign = 'center';
+        ctx.fillText('best AUC-PR', toX(15), PAD.top + 8);
     </script>
 
 </body>

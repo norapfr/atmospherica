@@ -1,795 +1,639 @@
-# ATMOSPHERICA
+# ATMOSPHERICA: Real-Time Atmospheric Data as Generative Painting with Integrated Extreme Event Prediction
 
-> *Un sistema de Machine Learning que convierte datos atmosféricos en tiempo real en pintura abstracta generativa. Cada cuadro es único, irrepetible, y codifica el estado del clima del día en un lenguaje visual con gramática propia.*
+> *A machine learning system that translates real-time atmospheric observations into deterministic generative painting, with an embedded predictive layer for extreme weather events using Random Forest and LSTM classifiers trained on ERA5 reanalysis data.*
 
----
-
-## Índice
-
-1. [Qué es ATMOSPHERICA](#qué-es-atmospherica)
-2. [La idea central](#la-idea-central)
-3. [Gramática visual](#gramática-visual)
-4. [Variable dominante — el motor de la composición](#variable-dominante--el-motor-de-la-composición)
-5. [Arquitectura del sistema](#arquitectura-del-sistema)
-6. [Módulo 1 — Ingesta de datos](#módulo-1--ingesta-de-datos)
-7. [Módulo 2 — Mapeador visual](#módulo-2--mapeador-visual)
-8. [Módulo 3 — Generador pictórico (v2)](#módulo-3--generador-pictórico-v2)
-9. [Estado actual del proyecto](#estado-actual-del-proyecto)
-10. [Lo que queda por construir](#lo-que-queda-por-construir)
-11. [Módulo 4 — Modelo predictivo ML](#módulo-4--modelo-predictivo-ml)
-12. [Módulo 5 — Automatización y archivo](#módulo-5--automatización-y-archivo)
-13. [Módulo 6 — Web de portfolio](#módulo-6--web-de-portfolio)
-14. [Stack tecnológico](#stack-tecnológico)
-15. [Estructura del repositorio](#estructura-del-repositorio)
-16. [Cómo ejecutar](#cómo-ejecutar)
-17. [Por qué esto es ML engineering, no solo arte](#por-qué-esto-es-ml-engineering-no-solo-arte)
+**[Live exhibition](https://norapfr.github.io/atmospherica)** &nbsp;·&nbsp; [Project](https://norapfr.github.io/atmospherica/about.html) &nbsp;·&nbsp; [Technical](https://norapfr.github.io/atmospherica/technical.html)
 
 ---
 
-## Qué es ATMOSPHERICA
+## Abstract
 
-ATMOSPHERICA es un sistema que ingiere datos meteorológicos y de calidad del aire en tiempo real de una ciudad, los procesa con un pipeline de normalización y mapeo paramétrico, y genera automáticamente una obra de arte abstracta única que codifica el estado atmosférico de ese día.
+ATMOSPHERICA is an autonomous system that, three times daily, ingests meteorological and air quality data from the OpenWeatherMap API, maps each variable to a formal visual parameter through a normalization pipeline calibrated on local historical ranges, and generates a unique abstract painting encoding the atmospheric state of that moment. A deterministic seeded RNG guarantees that the same atmospheric conditions always produce the same image. The dominant variable — defined as the argmax of normalized values across six climate variables — deforms the global composition, palette, and rendering behavior of every other layer.
 
-El sistema no genera imágenes decorativas ni visualizaciones de datos convencionales. Genera pinturas con una gramática visual definida y defendible donde cada decisión formal —color, tamaño, dirección, opacidad, fragmentación— proviene directamente de un dato climático real. El cuadro del 25 de abril de 2026 en Sevilla es diferente al del 26 de abril, y diferente al del mismo día en Oslo. La obra es el dato.
-
-El proyecto tiene tres módulos completamente funcionales y tres módulos en desarrollo. El resultado final será un sistema autónomo que genera y publica una nueva obra cada día, construye un archivo histórico, y añade una capa de predicción de eventos climáticos extremos mediante modelos de series temporales.
+A predictive component trained on ERA5 reanalysis data (1940–1990 and 2010–2024, ~24,800 daily observations) estimates the probability of an extreme weather event the following day. When risk exceeds defined thresholds, visual alarm signals appear in the painting using the morphology of today's dominant variable rendered in the event's canonical color. The full pipeline — data ingestion, feature engineering, prediction, rendering, PNG export, and web publication — runs autonomously via GitHub Actions and self-updates a GitHub Pages gallery with each execution.
 
 ---
 
-## La idea central
+## 1. Motivation and Design Rationale
 
-Existe una distinción fundamental entre **visualización de datos** y **traducción de datos a lenguaje artístico**.
+### 1.1 The problem with data visualization
 
-Una visualización muestra el dato. Un gráfico de temperatura a lo largo del día muestra líneas que suben y bajan. El dato es legible pero no se experimenta.
+Conventional data visualization translates numerical values into chart primitives: axes, bars, lines. The datum is represented but not experienced. A temperature chart shows that it was 42°C on a given day; it does not communicate what 42°C feels like in the Guadalquivir basin in August — the violence of it, the persistence of it, the way it overrides everything else.
 
-ATMOSPHERICA propone otra cosa: el dato **es** la forma. La temperatura no se muestra en un eje Y — determina el rango de color completo del cuadro. El viento no aparece como una flecha — sus cintas de pintura recorren el lienzo en la dirección exacta del viento real, con una longitud proporcional a su velocidad en metros por segundo. La presión atmosférica no es un número — decide si la composición se organiza en bandas horizontales arquitectónicas (anticiclón) o en rectángulos girados e inestables en los bordes (borrasca).
+ATMOSPHERICA proposes a different relationship between datum and representation. Rather than mapping climate data *onto* a visual form, it uses climate data to *generate* form through a grammar of rules where each variable controls a family of visual elements with fixed color semantics, parametric geometry, and dynamic behavior that changes qualitatively, not just quantitatively, as the variable's intensity grows.
 
-Esto tiene una consecuencia importante para el portfolio de ML: el sistema demuestra que su autor sabe construir pipelines de datos reales, normalizar variables con rangos históricos, diseñar sistemas de mapeo paramétrico complejos, y pensar en el output como un sistema con reglas, no como generación aleatoria.
+### 1.2 Why this constitutes an ML engineering problem
+
+The project is not a data art exercise with some Python attached. It is an end-to-end ML system with the following engineering requirements:
+
+- Real API ingestion with credential management and error handling
+- Historical normalization with local calibration (25°C is unremarkable in Seville; it is a heat event in Edinburgh — global ranges are meaningless)
+- Feature engineering for time series prediction (rolling means, lags, gradients, seasonal encoding, domain-specific composites)
+- Model training with appropriate evaluation methodology for imbalanced temporal data (TimeSeriesSplit, AUC as primary metric, threshold optimization)
+- Production inference that degrades gracefully when temporal context is unavailable
+- Automated deployment with state persistence (history CSVs committed to the repository)
+- A public, live artifact that accumulates daily
+
+The painting is the output format. The system underneath is the contribution.
 
 ---
 
-## Gramática visual
+## 2. Data
 
-La gramática visual es el corazón del proyecto. Es el conjunto de reglas que traduce cada variable climática en una decisión pictórica. Sin esta gramática, el proyecto sería "IA que genera imágenes bonitas". Con ella, es un sistema de codificación visual con semántica propia.
+### 2.1 ERA5 Reanalysis
 
-Cada variable produce una **forma característica** en el cuadro:
+The primary dataset is ERA5 reanalysis from the Copernicus Climate Data Store, downloaded via `cdsapi` for a 1.5° × 1.5° grid cell centred on Seville (38°N–36.5°N, 6.5°W–5°W). Two temporal periods were selected:
 
-| Variable | Forma | Color | Comportamiento |
-|---|---|---|---|
-| Temperatura | Círculos concéntricos | Azul (frío) → naranja-rojo (calor), escala fija por °C | Más calor = anillos más grandes y numerosos |
-| Viento | Curvas Bézier | Azul (más oscuro = más rápido) | Orientadas en la dirección geográfica exacta del viento |
-| Humedad | Óvalos difusos / triángulos | Verde (más saturado = más húmedo) | <35% HR → triángulos nítidos; >35% → elipses con halos |
-| Presión | Rectángulos y bandas | Ocre/siena (más sólido = más alta) | Alta presión → bandas horizontales; baja → rect. girados |
-| Nubes | Rombos aplastados | Gris azulado (más oscuro = más cobertura) | Concentrados en la mitad superior del canvas |
-| PM2.5 | Puntos y veladura | Violeta (más saturado = más contaminado) | La veladura afecta todas las capas subyacentes |
+- **1940–1990**: 51 years of pre-industrial and early-industrial climate. Provides the long-run statistical baseline for extreme event frequency and seasonal distribution in the Guadalquivir basin.
+- **2010–2024**: 15 years of contemporary climate with documented warming trend and increased frequency of extreme heat events in southern Iberia.
 
-### Temperatura → Color y círculos concéntricos
+The split is deliberate. Training exclusively on recent data would underestimate the historical frequency of cold and precipitation extremes. Training exclusively on historical data would miss the distributional shift in summer maxima driven by climate change. The combined dataset exposes the model to both the climatological baseline and the contemporary signal.
 
-El color de los círculos responde a un espectro continuo de seis rangos. Este color **no varía** con el dominante — es el único canal visual que mantiene su significado semántico absoluto independientemente del contexto:
+**Variables downloaded** at 06:00, 12:00, 18:00 UTC: 2m temperature (`t2m`), surface pressure (`sp`), 10m wind components (`u10`, `v10`), 2m dewpoint temperature (`d2m`), total precipitation (`tp`, accumulated), total cloud cover (`tcc`).
 
-| Rango | Color |
+**Processing pipeline:**
+
+| Step | Operation |
 |---|---|
-| ≤ 5°C | Azul profundo |
-| 6–12°C | Azul-verde |
-| 13–18°C | Verde |
-| 19–24°C | Amarillo-naranja |
-| 25–30°C | Naranja |
-| ≥ 31°C | Rojo |
+| Unit conversion | K → °C; Pa → hPa; m → mm (precipitation via diff); wind components → speed |
+| Humidity derivation | Magnus formula from dewpoint: `RH = 100 · exp(17.625·Td/(243.04+Td) − 17.625·T/(243.04+T))` |
+| Spatial aggregation | Mean over the 1.5° bounding box |
+| Temporal aggregation | Resample to daily: T_max, T_min, T_mean; P_mean, P_min; wind_max, wind_mean; precip_sum; humidity_max, humidity_mean; cloud_mean |
+| Bias correction | +2.5°C applied to all temperature fields; ERA5 systematically underestimates T_max in Seville at this grid resolution (confirmed against AEMET station records) |
 
-### Viento → Curvas Bézier orientadas
+**Final dataset:** 24,838 daily observations across both periods.
 
-Los trazos de viento apuntan en la dirección geográfica real. El ángulo se descompone en componentes cartesianas (`wind_dx`, `wind_dy`) para orientar cada curva con precisión vectorial. La longitud es proporcional a la energía del viento. Cuando el fondo es claro (presión o nubes dominantes, `pL > 65`), el color del trazo se oscurece automáticamente para mantener el contraste — las líneas siempre se leen aunque el viento sea suave.
+### 2.2 Label definition
 
-### Humedad → Triángulos o elipses según el nivel
+Binary classification target: will there be an extreme weather event tomorrow? The target is the event indicator shifted one day forward (`shift(-1)`).
 
-Con humedad baja (< 35% y no dominante) la forma es un triángulo equilátero nítido — aire seco, geometría definida. Por encima del 35% o cuando la humedad domina, la forma cambia a óvalos con halos borrosos que se expanden: la pintura "se humedece".
+Four event triggers (OR logic):
 
-### Presión → Bandas estructurales
+| Type | Criterion | Source |
+|---|---|---|
+| Heat | T_max ≥ 38°C | AEMET heat wave definition for Seville |
+| Cold | T_max ≤ 10°C | Local climatological threshold |
+| Wind | Speed ≥ 8 m/s | Gale-force onset |
+| Rain | Precip ≥ 1 mm/day | Measurable precipitation |
 
-Alta presión produce bandas horizontales que barren el canvas como arquitectura — el día es estable, el orden visual también. Baja presión produce rectángulos inclinados y fragmentados que se dispersan sin orden compositivo.
+**Event rate: 5.0%** of days across the full dataset. This strong class imbalance is the primary modeling challenge and drove every decision about loss function, class weighting, evaluation metric, and threshold selection.
 
-### Nubes → Rombos con peso vertical
+### 2.3 Real-time data
 
-Los rombos se concentran en la mitad superior del canvas (la nubosidad "cae desde arriba"). Con 0% de nubes no aparecen; con cobertura total llenan el cielo del cuadro.
+Production ingestion uses two OpenWeatherMap endpoints:
 
-### PM2.5 → Contaminación que ensucia todo
+- **Current Weather API**: temperature, pressure, wind speed and direction, humidity, cloud cover, precipitation in last hour, weather condition code
+- **Air Pollution API** (called with coordinates from weather response): PM2.5, NO₂, O₃, CO, SO₂, NH₃, AQI index
 
-La veladura violácea se aplica como última capa sobre todo lo demás. Con aire limpio (< 5 μg/m³) es casi invisible. Con contaminación alta cubre el cuadro con niebla de partículas y venas de smog horizontales.
-
----
-
-## Variable dominante — el motor de la composición
-
-Esta es la pieza conceptual central de la versión 2 del generador. Las versiones anteriores pintaban todas las variables con el mismo peso visual. La v2 introduce un mecanismo de **dominancia**: la variable con mayor valor normalizado en ese momento **se apodera de la composición entera** y deforma el comportamiento de todas las demás.
-
-### Cómo se calcula
-
-Primero, el mapeador (`mapper.py`) normaliza cada variable a [0, 1] con rangos históricos locales de Sevilla:
-
-```python
-temperature_norm = normalize(data["temperature"], 0, 46)   # 0°C → 46°C máximo histórico
-wind_energy      = normalize(data["wind_speed"], 0, 20)    # 0 calma → 20 m/s vendaval
-humidity_norm    = veil_opacity / 80.0                     # 0 = seco, 80 = niebla densa
-pressure_norm    = normalize(data["pressure"], 990, 1030)  # rango típico isobárico
-cloud_norm       = data["clouds"] / 100.0                  # 0% despejado → 100% cubierto
-pm_norm          = normalize(data["pm2_5"], 0, 75)         # 0 = limpio, 75 = muy malo (OMS)
-```
-
-Después, `generator.py` compara los seis valores normalizados y elige el mayor:
-
-```python
-def _compute_dominant(params):
-    scores = {
-        'temperatura': params['temperature_norm'],
-        'viento':      params['wind_energy'],
-        'humedad':     params['veil_opacity'] / 80.0,
-        'presion':     params['density'],
-        'nubes':       params['raw'].get('clouds', 15) / 100.0,
-        'pm25':        params['fragmentation'],
-    }
-    dominant = max(scores, key=scores.get)
-    return dominant, scores[dominant], scores
-```
-
-En el navegador, la misma lógica se replica en JavaScript sobre el objeto `C` (datos del día inyectados como JSON):
-
-```javascript
-const VARS = {
-  temperatura: C.temp_norm,
-  viento:      C.wind_energy,
-  humedad:     C.humidity_norm,
-  presion:     C.pressure_norm,
-  nubes:       C.cloud_norm,
-  pm25:        C.pm_norm,
-};
-
-let domKey = 'temperatura', domVal = 0;
-for (const [k, v] of Object.entries(VARS))
-  if (v > domVal) { domVal = v; domKey = k; }
-
-const DOM = domKey;           // nombre de la variable ganadora
-const DOM_STRENGTH = domVal;  // su valor normalizado, entre 0 y 1
-```
-
-El dominante no es un ranking ni una media ponderada. Es simplemente el **argmax** de los seis valores normalizados: la variable que más se aleja de su cero histórico en este momento. En un día de ola de calor, la temperatura domina. En un día de levante fuerte, domina el viento. En un día de alta presión estable con cielos despejados, la presión misma puede ganar aunque no parezca un dato "dramático".
-
-### Qué cambia cuando una variable domina
-
-El dominante modifica el sistema en cuatro niveles:
-
-**1. Paleta global del canvas**
-
-El color de fondo se mezcla en un 35% con el tinte característico de la variable dominante. Con presión dominante el fondo vira a aguamarina ocre; con temperatura dominante, a naranja cálido; con PM2.5, a una niebla violácea.
-
-```javascript
-const mix = DOM_STRENGTH * 0.35;
-const pH = bgH * (1 - mix) + dt.h * mix;  // tono del fondo interpolado
-```
-
-**2. Modificadores geométricos globales**
-
-```javascript
-const MOD = {
-  globalAngle: DOM === 'viento'      ? Math.atan2(C.wind_dy, C.wind_dx) * 0.7 : 0,
-  globalScale: DOM === 'temperatura' ? 0.85 + DOM_STRENGTH * 0.35 : 1.0,
-  blur:        DOM === 'humedad'     ? DOM_STRENGTH * 4 : 0,
-  squish:      DOM === 'nubes'       ? 1 - DOM_STRENGTH * 0.3 : 1,
-  rigid:       DOM === 'presion'     ? DOM_STRENGTH : 0,
-};
-```
-
-- `globalAngle` (viento dominante): todo el canvas rota levemente en la dirección del viento real.
-- `globalScale` (temperatura dominante): las formas de temperatura se escalan hacia arriba, invadiendo más superficie.
-- `blur` (humedad dominante): las formas se pintan con desenfoque proporcional a la humedad, simulando aire saturado.
-- `squish` (nubes dominantes): los rombos de nube se aplastan verticalmente, como nubes bajo presión.
-- `rigid` (presión dominante): las bandas de presión se vuelven más estrechas y disciplinadas.
-
-**3. Orden de renderizado**
-
-Las capas se dibujan de fondo a frente, pero el dominante siempre se pinta el último, encima de todo:
-
-```javascript
-const order = ['presion', 'nubes', 'viento', 'humedad', 'pm25', 'temperatura'];
-const idx = order.indexOf(DOM);
-if (idx > -1) { order.splice(idx, 1); order.push(DOM); }
-```
-
-Esto garantiza que la variable que más energía tiene ese día no quede enterrada por las demás.
-
-**4. Comportamiento dentro de cada función de dibujo**
-
-Cada función (`drawTemperatura`, `drawViento`, etc.) recibe `isDom = DOM === 'clave'` y cambia su comportamiento:
-
-- En modo no dominante: pocas formas, tamaño reducido, alpha bajo.
-- En modo dominante: muchas formas, tamaño máximo, alpha alto, formas que invaden zonas que normalmente no ocuparían.
-
-Por ejemplo, el viento en modo no dominante produce 6–20 curvas cortas dispersas. En modo dominante con energía alta (>0.5) produce 50–90 líneas largas que atraviesan el canvas de lado a lado, con el canvas entero rotado en la dirección del viento.
-
-### Ejemplo: día del 27 de abril de 2026, Sevilla, 13h
-
-```
-temperatura  : 0.45  (20.8°C de 46°C máximo)
-viento       : 0.31  (6.2 m/s de 20 m/s máximo)
-humedad      : 0.64  (HR 65% / 80)
-presion      : 0.72  ← DOMINANTE (1014 hPa, el 72% del rango 990-1030)
-nubes        : 0.00  (0% de cobertura)
-pm25         : 0.06  (4.8 μg/m³, aire muy limpio)
-```
-
-La presión gana con 0.72 porque ese día la presión absoluta (1014 hPa) ocupa el 72% de su rango histórico, mientras que la temperatura (20.8°C) solo ocupa el 45% del suyo. El cuadro resultante tiene bandas horizontales que estructuran la composición, un fondo con tinte aguamarina-ocre, y el viento —aunque perceptible— aparece como trazos oscuros sobre fondo claro, subordinado al orden de la presión.
+Credentials are stored as a GitHub Actions secret and locally in `.env` (gitignored). Three executions daily (08h, 12h, 20h Spain local time) aggregate into one canonical daily row through deduplication logic in `data/history.py`, matching the daily frequency of the ERA5 training data.
 
 ---
 
-## Arquitectura del sistema
+## 3. Feature Engineering
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      ATMOSPHERICA v2                        │
-│                                                             │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │  MÓDULO 1    │    │  MÓDULO 2    │    │  MÓDULO 3    │  │
-│  │  Ingesta     │───▶│  Mapeador    │───▶│  Generador   │  │
-│  │  de datos    │    │  visual      │    │  pictórico   │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│         │                  │                    │           │
-│    APIs externas      Normalización        HTML autónomo    │
-│    OpenWeatherMap     + dominancia         Canvas 2D        │
-│    Air Pollution API  + ML params          → PNG exportable │
-│                                                             │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │  MÓDULO 4    │    │  MÓDULO 5    │    │  MÓDULO 6    │  │
-│  │  Modelo ML   │    │  Automati-   │    │  Web de      │  │
-│  │  predictivo  │    │  zación      │    │  portfolio   │  │
-│  │  (pendiente) │    │  (pendiente) │    │  (pendiente) │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│         │                   │                   │           │
-│    ERA5 + AEMET        GitHub Actions       GitHub Pages    │
-│    Series temporales   Cron diario         Archivo vivo     │
-└─────────────────────────────────────────────────────────────┘
-```
+### 3.1 Random Forest features (39)
 
-El flujo de datos completo es:
+| Group | Features | Count |
+|---|---|---|
+| Raw daily aggregates | T_max, T_min, T_mean, P_mean, P_min, wind_max, wind_mean, humidity_max, humidity_mean, precip_sum, cloud_mean | 11 |
+| 3-day rolling means | temp_c_max_ma3, pressure_hpa_mean_ma3, wind_speed_max_ma3, humidity_mean_ma3 | 4 |
+| 7-day rolling means | temp_c_max_ma7, pressure_hpa_mean_ma7, wind_speed_max_ma7, humidity_mean_ma7 | 4 |
+| Temporal lags (1–3 days) | temp_c_max_lag{1,2,3}, precip_mm_sum_lag{1,2,3}, wind_speed_max_lag{1,2,3} | 9 |
+| First-order gradients | temp_grad, pressure_grad | 2 |
+| Seasonal encoding | sin_doy, cos_doy | 2 |
+| Composite features | temp_range, heat_intensity, pressure_deficit, humidity_range, wind_spike, dry_index, pressure_norm | 7 |
 
-```
-API → fetcher.py → mapper.py → generator.py → painting.html → PNG
-```
+**Dry index** (`temp_range × (100 − humidity_mean)`) is the most domain-specific feature. It captures the combination of wide diurnal temperature swings and very low relative humidity that characterizes Seville's pre-heatwave atmospheric signature. Ranked 10th by SHAP, it contributes independently of the individual temperature and humidity features already in the set.
 
-Cada paso transforma los datos: el fetcher los obtiene crudos, el mapper los normaliza y calcula la variable dominante, el generador construye el HTML con los datos incrustados como JSON, y el navegador renderiza la pintura final usando Canvas 2D nativo.
+**Pressure deficit** (`pressure_hpa_mean − pressure_hpa_mean_ma7`) captures the short-term deviation of pressure from its recent mean. A negative deficit signals a developing low-pressure system even when absolute pressure values appear normal.
+
+### 3.2 LSTM features (17)
+
+The LSTM receives a reduced set of physical and derived features, without the full lag structure, to avoid redundancy with the sequence's own temporal context:
+
+**Raw physical variables (9):** temp_c, dewpoint_c, pressure_hpa, wind_u, wind_v, precip_mm, cloud_cover, season_sin, season_cos
+
+**Derived temporal features (8):** temp_ma3, temp_ma7, pressure_ma3, pressure_grad, wind_speed, wind_ma3, precip_ma3, dry_index
+
+**Critical implementation note:** All features are computed over the complete daily DataFrame before sequence construction. The StandardScaler is fitted exclusively on training days (`feats[:train_end]`) and applied to the full array. Constructing sequences first and scaling afterward introduces overlap bias: the same day appears in multiple windows with different weights, distorting the scaler's statistics.
 
 ---
 
-## Módulo 1 — Ingesta de datos
+## 4. Models
 
-**Archivos:** `data/fetcher.py`, `data/mock.py`
+### 4.1 Random Forest
 
-### Fuentes de datos
-
-El módulo 1 consume dos endpoints de la API de OpenWeatherMap:
-
-**Current Weather API** — datos meteorológicos en tiempo real:
-- `temp` — temperatura en °C
-- `temp_min`, `temp_max` — rango diario
-- `humidity` — humedad relativa en %
-- `pressure` — presión atmosférica en hPa
-- `wind_speed` — velocidad del viento en m/s
-- `wind_deg` — dirección del viento en grados (0=Norte, 90=Este, 180=Sur, 270=Oeste)
-- `clouds` — cobertura nubosa en %
-- `visibility` — visibilidad en metros
-- `weather_id` — código de fenómeno meteorológico (lluvia, tormenta, niebla...)
-
-**Air Pollution API** — calidad del aire:
-- `pm2_5` — partículas finas en μg/m³ (el indicador principal de contaminación)
-- `no2` — dióxido de nitrógeno en μg/m³ (tráfico)
-- `o3` — ozono en μg/m³ (reacciones fotoquímicas)
-
-### Flujo de obtención
+**Configuration:**
 
 ```python
-# 1. Llamada a Weather API con ciudad y país
-weather = get_weather()  # → JSON con todos los campos
-
-# 2. Extraer coordenadas para la Air API
-lat = weather["coord"]["lat"]
-lon = weather["coord"]["lon"]
-
-# 3. Llamada a Air Pollution API con coordenadas
-air = get_air_quality(lat, lon)  # → JSON con componentes
-
-# 4. Unificar en un dict limpio
-data = {
-    "temperature": weather["main"]["temp"],
-    "pressure":    weather["main"]["pressure"],
-    "wind_speed":  weather["wind"]["speed"],
-    "wind_deg":    weather["wind"]["deg"],
-    "humidity":    weather["main"]["humidity"],
-    "clouds":      weather["clouds"]["all"],
-    "pm2_5":       air["list"][0]["components"]["pm2_5"],
-    ...
-}
+RandomForestClassifier(
+    n_estimators=400,
+    max_depth=10,
+    min_samples_leaf=4,
+    class_weight="balanced_subsample",  # per-tree resampling
+    random_state=42,
+    n_jobs=-1
+)
 ```
 
-### Mock para desarrollo
+`balanced_subsample` recomputes class weights independently for each bootstrap sample. This is more appropriate than global `balanced` weighting under strong imbalance because each tree sees a different effective class distribution, reducing co-variance between trees on the minority class.
 
-El archivo `data/mock.py` contiene datos estáticos de Sevilla para desarrollar sin necesidad de llamadas a la API. Esto permite iterar en el generador visual sin consumir el límite de 1000 llamadas/día del plan gratuito.
+No feature scaling is applied. Random Forest is scale-invariant and any preprocessing step introduces unnecessary complexity with no benefit.
 
-### Gestión de credenciales
+**Evaluation methodology:** TimeSeriesSplit with 5 folds. Each fold's validation set is strictly after its training set in chronological order. No shuffling at any point. This reflects the realistic deployment scenario: the model predicts future events based on past observations.
 
-La API key se almacena en un archivo `.env` que nunca se sube al repositorio (está en `.gitignore`). Se carga con `python-dotenv`. Este es un patrón fundamental de seguridad en proyectos de ML con datos externos.
+**Results:**
+
+| Fold | F1 | ROC-AUC |
+|---|---|---|
+| 1 | 0.043 | 0.806 |
+| 2 | 0.127 | 0.773 |
+| 3 | 0.190 | 0.888 |
+| 4 | 0.156 | 0.825 |
+| 5 | 0.229 | 0.886 |
+| **Mean** | **0.149** | **0.836** |
+
+**On the F1 score:** F1 = 0.149 is not a failure metric. With a 5.0% event rate, a classifier that predicts all negatives achieves F1 = 0.0 and accuracy = 95%. The RF's F1 reflects genuine positive detections at a useful precision-recall trade-off, achieved against a strongly imbalanced baseline. **ROC-AUC 0.836 is the operative metric**: it measures discriminative power across all thresholds and is not affected by class imbalance. A model that reliably ranks high-risk days above low-risk days is exactly what the visual alarm system requires.
+
+**SHAP feature importance (top 10, mean |SHAP|):**
+
+| Feature | SHAP |
+|---|---|
+| pressure_hpa_min | 0.0324 |
+| temp_c_max | 0.0285 |
+| cos_doy | 0.0226 |
+| pressure_norm | 0.0201 |
+| temp_c_mean | 0.0197 |
+| cloud_cover_mean | 0.0185 |
+| pressure_hpa_mean | 0.0181 |
+| humidity_mean | 0.0176 |
+| wind_speed_mean | 0.0155 |
+| dry_index | 0.0153 |
+
+Pressure features (min, mean, norm) collectively contribute more than temperature, confirming that synoptic-scale dynamics — not just local temperature thresholds — are the primary signal for next-day extreme events.
+
+### 4.2 AtmosphericLSTM
+
+**Architecture:**
+
+```
+Input  → (batch, 14, 17)        # 14-day window × 17 features
+LSTM₁  → hidden=128             # short-range synoptic patterns
+LSTM₂  → hidden=64              # regime-level compression
+LayerNorm → (batch, 64)         # last timestep; LayerNorm > BatchNorm for short seqs
+Linear(64→32) + GELU + Dropout(0.25)
+Linear(32→1) + Sigmoid          # P(extreme event tomorrow)
+```
+
+**Trainable parameters:** 127,169
+
+**Training protocol:**
+- Optimizer: AdamW, lr=1×10⁻⁴, weight_decay=1×10⁻⁴
+- Scheduler: Cosine annealing over 150 epochs
+- Loss: Focal Loss (α=0.80, γ=1.5)
+- Early stopping: patience=25 on validation AUC-PR
+- Batch size: 64 (larger batches → more stable gradients on CPU)
+- Split: 70/10/20 train/val/test with 14-day gap between partitions
+
+**Focal Loss rationale:** `FL(p_t) = −α_t · (1−p_t)^γ · log(p_t)`. The modulating factor `(1−p_t)^γ` down-weights confidently correct predictions (the majority of negatives) and concentrates gradient signal on the rare, hard positives. γ=1.5 was chosen over the canonical γ=2.0 because with a 5% event rate the model struggles to find positive examples early in training; a softer focus parameter allows more stable initial convergence.
+
+**Results:**
+
+| Metric | Value |
+|---|---|
+| Test ROC-AUC | 0.678 |
+| Test F1 (th=0.38) | 0.135 |
+| Test AUC-PR | 0.091 |
+| Best val AUC-PR | 0.121 |
+| Epochs to early stopping | 40 / 150 |
+
+**Training dynamics:** AUC-PR peaked at epoch 15 (0.121) and did not improve over the following 25 epochs. ROC-AUC continued rising slowly (0.658 → 0.712) while AUC-PR stagnated — a characteristic signature of Focal Loss on imbalanced data where the model has exhausted its ability to discriminate the positive class under the precision-recall constraint but continues improving ranking quality.
+
+### 4.3 Comparative analysis
+
+| Dimension | Random Forest | AtmosphericLSTM |
+|---|---|---|
+| Test ROC-AUC | **0.836** | 0.678 |
+| Test F1 | 0.149 | 0.135 |
+| Features | 39 (with explicit lags) | 17 (raw + derived) |
+| Sequence context | Encoded as lag features | 14-day window |
+| Training data | 5,472 (RF subset) | 24,838 |
+| Scaling required | No | Yes (StandardScaler) |
+| Inference complexity | O(n_trees · depth) | O(seq_len · hidden) |
+
+The RF outperforms the LSTM by 0.158 AUC points despite training on a smaller dataset (5,472 vs 24,838 days). The primary reason is feature engineering: the RF receives pre-computed 7-day rolling means, 3-day lags, and domain-specific composites that encode temporal context explicitly. The LSTM must derive equivalent representations from raw 14-day sequences, which requires more capacity and more data than available. With ~24k daily observations and 127k parameters, the LSTM is not capacity-constrained — it is information-constrained: the temporal patterns needed for accurate prediction are better captured by explicit engineered features than by learning them from sequences of this length and this dataset size.
+
+This finding has practical implications: for tabular climate prediction at daily resolution with datasets under 50k observations, explicit temporal feature engineering paired with gradient-boosted trees or random forests will generally outperform sequence models. The LSTM becomes competitive when raw high-frequency data (hourly or sub-hourly) is available and explicit feature engineering becomes intractable.
 
 ---
 
-## Módulo 2 — Mapeador visual
+## 5. Visual System
 
-**Archivo:** `visual/mapper.py`
+### 5.1 Normalization and dominance
 
-El mapeador es la pieza más conceptual del proyecto. Recibe el diccionario de datos crudos y devuelve un diccionario de parámetros visuales. Aquí es donde la gramática visual se implementa matemáticamente.
+Six variables are normalized to [0,1] using historical ranges calibrated for Seville:
 
-### Normalización
+| Variable | Min | Max | Formula |
+|---|---|---|---|
+| Temperature | 0°C | 46°C | `(T - 0) / 46` |
+| Wind energy | 0 m/s | 20 m/s | `W / 20` |
+| Humidity | 0 | `veil_opacity / 80` | mapper output |
+| Pressure | 990 hPa | 1030 hPa | `(P - 990) / 40` |
+| Clouds | 0% | 100% | `C / 100` |
+| PM2.5 | 0 μg/m³ | 75 μg/m³ | `PM / 75` |
 
-Todas las variables se normalizan al rango [0, 1] con rangos históricos de referencia para Sevilla:
+The **dominant variable** is the argmax of these six values. It controls global composition through four mechanisms: (1) background palette tinting (35% mix toward the dominant's canonical hue), (2) geometric modifiers (canvas rotation for wind, blur for humidity, squish for clouds, scale for temperature), (3) render order (dominant always rendered last, on top of all other layers), (4) within-function behavior (dominant mode produces 2–4× more elements at larger scale with higher alpha).
 
-```python
-def normalize(value, min_val, max_val):
-    return max(0.0, min(1.0, (value - min_val) / (max_val - min_val)))
+### 5.2 Visual grammar
 
-temperature_norm = normalize(data["temperature"], 0, 46)   # 0°C a 46°C (máximo histórico Sevilla)
-pressure_norm    = normalize(data["pressure"], 990, 1030)  # rango típico de presión
-pm_norm          = normalize(data["pm2_5"], 0, 75)         # 0 = aire limpio, 75 = muy malo (OMS)
-humidity_norm    = normalize(data["humidity"], 10, 95)
-wind_energy      = normalize(data["wind_speed"], 0, 20)    # 0 = calma, 20 = vendaval
-```
+Each variable maps to a fixed family of forms with fixed color semantics:
 
-Usar rangos históricos locales es importante: una temperatura de 25°C en Oslo es calor extremo; en Sevilla es primavera normal. El sistema normaliza con contexto local, no con rangos globales.
+| Variable | Form | Color |
+|---|---|---|
+| Temperature | Concentric circles | Blue (≤5°C) → green (13–18°C) → orange (25–30°C) → red (≥31°C) |
+| Wind | Bézier curves | HSL(220) with luminosity inversely proportional to background brightness |
+| Humidity | Ovals (>35% RH) / triangles (<35% RH) | HSL(150), saturation ∝ humidity |
+| Pressure | Horizontal bands (high P) / tilted rectangles (low P) | HSL(38), opacity ∝ pressure |
+| Clouds | Flattened diamonds, upper-canvas weighted | HSL(210), darkness ∝ cloud cover |
+| PM2.5 | Dots + violet global haze | HSL(285), saturation ∝ PM2.5 |
 
-### Descomposición vectorial del viento
+Temperature color is the only channel that maintains absolute semantic invariance: it never changes regardless of which variable dominates, making temperature always readable even when it is not dominant.
 
-El ángulo del viento se descompone en componentes cartesianas para usarlo como vector de dirección en el generador:
+### 5.3 Predictive alarm system
 
-```python
-wind_angle_rad = math.radians(data["wind_deg"])
-wind_dx = math.sin(wind_angle_rad)   # componente horizontal
-wind_dy = -math.cos(wind_angle_rad)  # componente vertical (invertido por convención de pantalla)
-```
+When `risk_score > 0.06`, the painting encodes the prediction through progressive visual signals. Each alarm layer uses the **morphology of today's dominant variable** rendered in the **color of tomorrow's predicted event type**:
 
-Esta descomposición permite que los trazos de viento en el cuadro apunten exactamente en la dirección geográfica correcta.
+| Threshold | Signal | Description |
+|---|---|---|
+| > 6% | Edge triangles | Triangles penetrating inward from all four margins; depth ∝ risk |
+| > 20% | Background tint | Semi-transparent global wash in event color |
+| > 25% | Internal fractures | Dominant-morphology shapes in event color scattered across canvas |
+| > 75% | Alert border | Double rectangle frame (diffuse + sharp) around full canvas |
+| > 85% | Radial focal points | Diffuse light sources in event color contaminating background gradient |
 
-### Parámetros visuales de salida
+Event colors are fixed and do not appear in the base grammar: heat = HSL(8, 85%, 50%); cold = HSL(215, 78%, 42%); wind = HSL(155, 62%, 38%); rain = HSL(200, 72%, 40%). Any tint in these hues in a painting is a prediction signal, not climate description.
 
-El mapeador produce los siguientes parámetros:
+### 5.4 Deterministic reproducibility
 
-```python
-{
-    "temperature_norm":  float,   # 0-1 para usar en el generador
-    "density":           float,   # 0-1 desde presión (también es pressure_norm)
-    "wind_energy":       float,   # 0-1 desde velocidad del viento
-    "wind_dx":           float,   # componente horizontal del viento
-    "wind_dy":           float,   # componente vertical del viento
-    "fragmentation":     float,   # 0-1 desde PM2.5
-    "veil_opacity":      float,   # 0-80 para el velo de humedad
-    "risk_score":        float,   # 0-1 desde el modelo ML (0.0 si no disponible)
-    "event_type":        str,     # "heat"|"cold"|"rain"|"wind"|"none"
-    "ml_ready":          bool,    # True si el modelo está entrenado
-    "raw":               dict,    # datos originales sin normalizar
-}
-```
-
----
-
-## Módulo 3 — Generador pictórico (v2)
-
-**Archivo:** `visual/generator.py`
-
-El generador toma los parámetros del mapeador y produce un archivo HTML autónomo que renderiza la pintura en el navegador usando Canvas 2D nativo (sin p5.js). Es el módulo más extenso y el que produce el resultado visible.
-
-### Por qué Canvas 2D nativo en v2
-
-La v1 del generador usaba p5.js (el port JavaScript de Processing). La v2 lo reemplaza con Canvas 2D nativo del navegador por tres razones:
-
-- **Sin dependencias externas**: el HTML es completamente autónomo. No necesita CDN, no falla si p5.js cambia de versión, funciona offline.
-- **RNG determinista seeded**: p5.js no tiene RNG seeded nativo. El nuevo generador usa un RNG propio (`seededRng`) que garantiza que el mismo día y la misma ciudad producen siempre exactamente el mismo cuadro, sin variación entre renders.
-- **Control total del pipeline de render**: el orden de capas, los modificadores globales y el sistema de dominancia requieren intervenir en cada paso del render de forma que p5.js no permitía sin hackearlo.
-
-### RNG determinista por cuadro
-
-El generador no usa `Math.random()`. Usa un generador XORShift seeded con una clave compuesta por ciudad + fecha + hora:
+The renderer uses an XORShift PRNG seeded from the concatenation of `city + date + hour`. This guarantees that the same atmospheric observation always produces the same painting in any browser on any machine. Reproducibility is treated as a first-class requirement: the painting is a data artifact, not a stochastic sample.
 
 ```javascript
 function seededRng(seed) {
   let s = seed >>> 0;
   return () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return (s >>> 0) / 4294967296; };
 }
-
-// Semilla construida desde los metadatos del cuadro
-const ks = C.date.replace(/-/g, '') + C.hour + C.city;
-for (let i = 0; i < ks.length; i++) sv = (sv * 31 + ks.charCodeAt(i)) | 0;
-const SR = seededRng(Math.abs(sv) || 99991);
-```
-
-Esto garantiza que `atmospherica_Seville_2026-04-27_13h.html` produce siempre el mismo cuadro, en cualquier navegador, en cualquier máquina. La reproducibilidad es un requisito de cualquier pipeline de ML.
-
-### Inyección de datos sin `.format()`
-
-Los datos climáticos se pasan al JavaScript como JSON mediante sustitución de texto, **no** mediante `.format()` de Python. Esto evita el conflicto entre las llaves `{}` de Python y las de JavaScript:
-
-```python
-html = HTML_TEMPLATE
-html = html.replace("__CITY__",       city)
-html = html.replace("__CITY_UPPER__", city.upper())
-html = html.replace("__CLIMATE_JSON__",
-                    json.dumps(climate_data, indent=2, ensure_ascii=False))
-```
-
-El objeto `C` queda disponible globalmente en el JavaScript con todos los datos del día y sus valores normalizados.
-
-### Los seis pases de pintura
-
-La pintura se construye en seis capas secuenciales. El dominante siempre se pinta en último lugar:
-
-**Capa 1 — Fondo (`drawFondo`)**
-
-Relleno sólido en `P.paper` (color base del día según hora y dominante) más un gradiente radial cuyo foco varía con la hora: amanecer arriba-izquierda, mediodía arriba-centro, puesta de sol a la derecha. Si el dominante es `nubes`, se añade un gradiente lineal que cae desde arriba. Si es `pm25`, una veladura violácea cubre todo el fondo.
-
-**Capa 2 — Presión (`drawPresion`)**
-
-Rectángulos y bandas. Con presión dominante y valor > 0.5, las bandas son casi horizontales y barren el canvas de arriba a abajo con distribución uniforme. Con valor bajo o no dominante, son rectángulos inclinados con ángulo aleatorio. En modo dominante con valor alto, además aparecen bloques en las cuatro esquinas del canvas.
-
-**Capa 3 — Nubes (`drawNubes`)**
-
-Rombos con ejes desiguales (más anchos que altos). Concentrados en la mitad superior cuando son dominantes. El parámetro `MOD.squish` los aplana verticalmente en proporción a la fuerza del dominante.
-
-**Capa 4 — Viento (`drawViento`)**
-
-Curvas Bézier cuadráticas orientadas en la dirección del viento (`wind_dx`, `wind_dy`). Con energía > 0.5 y el viento como dominante, el canvas completo rota levemente en la dirección del viento antes de pintar las líneas. La longitud varía desde trazos cortos de 15px (calma) hasta líneas que cruzan el canvas entero (vendaval). El color del trazo se adapta al fondo: si el fondo es claro (`pL > 65`), la luminosidad del azul baja a 18–42% para mantener contraste.
-
-**Capa 5 — Humedad (`drawHumedad`)**
-
-Con humedad < 35% y no dominante: triángulos equiláteros pequeños y nítidos. Con humedad > 35% o dominante: óvalos con `MOD.blur` aplicado mediante `ctx.filter` para simular los bordes difusos del aire húmedo. Con valor alto, un gradiente radial adicional crea halos de vapor alrededor de cada forma.
-
-**Capa 6 — PM2.5 (`drawPM`)**
-
-Veladura de fondo + puntos dispersos + venas de smog horizontales (curvas Bézier de grosor variable). La veladura se aplica sobre todo lo anterior como una capa semitransparente global, ennegreciendo y ensuciando el conjunto.
-
-**Capa 7 — ML (`drawML`)**
-
-Si el modelo está activo y `risk_score > 0.06`, se añaden señales de advertencia del evento predicho para mañana. Estas señales usan la **forma del dominante actual** pero con el **color del evento futuro** (rojo para calor, azul para frío, verde para viento, azul-gris para lluvia). Las señales se activan por umbrales progresivos de riesgo: triángulos en los bordes desde el 6%, fracturas internas desde el 25%, marco de alerta desde el 75%.
-
-**Capa 8 — Ruido (`addNoise`)**
-
-Último paso: ruido gaussiano leve aplicado pixel a pixel sobre toda la imagen para eliminar el aspecto "digital" y añadir textura de superficie. La intensidad aumenta si el dominante es PM2.5.
-
-### Sistema de color adaptativo
-
-El objeto `P` (paleta) se construye en función del dominante y la hora del día. Cada variable tiene su función de color dedicada que responde a su valor normalizado:
-
-```javascript
-windC:  (a=1) => {
-  const bgLight = pL > 65;  // fondo claro → trazo oscuro
-  const wL = bgLight ? Math.max(18, 42 - C.wind_energy * 28) : Math.min(78, 62 - C.wind_energy * 28);
-  const wS = bgLight ? 70 + C.wind_energy * 25 : 45 + C.wind_energy * 40;
-  return `hsla(220, ${wS}%, ${wL}%, ${a})`;
-},
-tempC:  (a=1) => { /* espectro fijo por °C, independiente del dominante */ },
-humC:   (a=1) => `hsla(150, ${35 + C.humidity_norm * 50}%, ${55 - C.humidity_norm * 25}%, ${a})`,
-presC:  (a=1) => `hsla(38,  ${38 + C.pressure_norm * 38}%, ${58 - C.pressure_norm * 22}%, ${a})`,
-cloudC: (a=1) => `hsla(210, ${18 + C.cloud_norm * 22}%,   ${65 - C.cloud_norm * 30}%,   ${a})`,
-pmC:    (a=1) => `hsla(285, ${30 + C.pm_norm * 50}%,      ${52 - C.pm_norm * 28}%,      ${a})`,
-```
-
-Los parámetros de cada color son funciones continuas de la variable — no tablas de lookup ni condicionales. Más valor normalizado produce más saturación y menos luminosidad en todos los casos.
-
-### Exportación del PNG
-
-El botón GUARDAR PNG crea un canvas HTML5 temporal, dibuja un fondo opaco (el canvas principal tiene fondo transparente), copia la pintura encima, y usa `canvas.toBlob()` para generar el archivo PNG directamente en el navegador sin pasar por un servidor. El nombre incluye ciudad, fecha y hora automáticamente.
-
----
-
-## Estado actual del proyecto
-
-### ✅ Completado y funcional
-
-- **Ingesta de datos en tiempo real** desde OpenWeatherMap (Weather + Air Pollution APIs)
-- **Mock de datos** para desarrollo sin API
-- **Mapeador visual completo** con normalización de todas las variables y cálculo del dominante
-- **Generador v2** con Canvas 2D nativo, RNG seeded, sistema de dominancia, seis capas climáticas + ML
-- **Sistema de dominancia**: la variable con mayor valor normalizado deforma geometría, paleta, orden de capas y comportamiento de todas las demás
-- **Paleta adaptativa** que ajusta contraste automáticamente según luminosidad del fondo
-- **Integración ML visual**: señales de riesgo que usan la gramática del dominante actual en el color del evento futuro
-- **Leyenda interactiva**: tabla de capas ML con estado en tiempo real (activo/inactivo) y umbrales de activación
-- **Exportación PNG** funcional con fondo opaco y nombre automático
-- **Gestión segura de credenciales** con `.env` y `python-dotenv`
-
-### 🔄 En iteración activa
-
-- Refinamiento de los pesos del dominante para climas ambiguos (días en que dos variables están muy próximas)
-- Calibración de alphas en cada capa para garantizar legibilidad en los seis tipos de día posibles
-- Tests de edge cases: dominante = nubes al 0%, dominante = PM2.5 en día limpio
-
----
-
-## Lo que queda por construir
-
-Los módulos 4, 5 y 6 son los que convierten ATMOSPHERICA de un generador de imágenes en un sistema de ML real y en un producto de portfolio completo.
-
----
-
-## Módulo 4 — Modelo predictivo ML
-
-**Archivos previstos:** `ml/trainer.py`, `ml/predictor.py`, `ml/features.py`
-
-Este es el módulo que justifica que el proyecto sea de **Machine Learning** y no solo arte generativo.
-
-### El problema
-
-Los cuadros actuales reflejan el clima del momento. El módulo 4 añade una capa predictiva: el sistema analiza los patrones de los últimos 7-14 días y predice si mañana habrá un **evento climático extremo** (ola de calor, episodio de contaminación alta, tormenta, calima sahariana).
-
-Cuando el modelo predice un evento extremo, el cuadro de hoy incorpora señales visuales de advertencia usando la gramática del dominante actual pero en el color del evento futuro. El cuadro advierte antes de que el evento ocurra.
-
-### Dataset
-
-El dataset de entrenamiento se construirá con **ERA5 de Copernicus**, el reanálisis climático más completo del mundo. Contiene datos horarios desde 1940 hasta hoy a resolución de ~31km. Se accede vía la librería `cdsapi` de Python.
-
-Para Sevilla se descargarán los últimos 10 años de:
-- Temperatura a 2 metros
-- Presión al nivel del mar
-- Velocidad y dirección del viento a 10 metros
-- Humedad relativa
-- Precipitación total
-
-Como etiquetas de entrenamiento se usarán los registros históricos de **AEMET OpenData** (Agencia Estatal de Meteorología), que tiene datos de estaciones meteorológicas y registros de eventos extremos verificados.
-
-### Arquitectura del modelo
-
-**Fase 1 — Random Forest con features de series temporales**
-
-Features de entrada (ventana de 7 días):
-- Medias móviles de temperatura, presión y PM2.5
-- Diferencias entre días consecutivos (gradiente de presión)
-- Tendencia de temperatura (pendiente de regresión lineal en la ventana)
-- Hora del año codificada con seno/coseno para capturar estacionalidad
-- Temperatura máxima y mínima del período
-
-Target: clasificación binaria de evento extremo al día siguiente (o regresión de temperatura máxima esperada).
-
-**Fase 2 — LSTM para dependencias temporales largas**
-
-```
-Input: secuencia de 30 días × 8 features
-LSTM(128) → Dropout(0.2) → LSTM(64) → Dense(32) → Dense(1, sigmoid)
-```
-
-**Integración con el generador**
-
-```python
-risk_score = predictor.predict(last_14_days)
-# risk_score llega al generador como parámetro visual
-# y activa las capas de alerta por umbrales progresivos
-```
-
-### Evaluación
-
-- Accuracy y F1-score para clasificación
-- RMSE para regresión de temperatura
-- Curva ROC para análisis de umbral de clasificación
-- Análisis SHAP para interpretabilidad de features
-
----
-
-## Módulo 5 — Automatización y archivo
-
-**Archivos previstos:** `.github/workflows/daily.yml`, `archive/logger.py`
-
-### Generación automática diaria
-
-```yaml
-# .github/workflows/daily.yml
-on:
-  schedule:
-    - cron: '0 22 * * *'  # 23:00 hora española (UTC+1)
-jobs:
-  generate:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate painting
-        env:
-          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
-        run: python main.py --headless --save-png
-```
-
-### Exportación headless
-
-```python
-# main.py con flag --headless
-if args.headless:
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        page = browser.new_page()
-        page.goto(f"file://{os.path.abspath(html_path)}")
-        page.locator('#save').click()
-```
-
-### Archivo histórico
-
-```json
-{
-  "2026-04-27": {
-    "city": "Seville",
-    "image": "output/atmospherica_Seville_2026-04-27.png",
-    "climate": { "temperature": 20.8, "pressure": 1014, "wind_speed": 6.2, ... },
-    "dominant": { "variable": "presion", "strength": 0.72 },
-    "ml": { "risk_score": 0.149, "event_type": "none" }
-  }
-}
 ```
 
 ---
 
-## Módulo 6 — Web de portfolio
+## 6. System Architecture
 
-**Archivos previstos:** `web/index.html`, `web/gallery.html`, `web/about.html`
+### 6.1 End-to-end pipeline
 
-La web se publicará en **GitHub Pages** con tres secciones:
+```
+OpenWeatherMap + Air Pollution APIs
+        │
+        ▼
+   data/fetcher.py         real-time weather + air quality
+        │
+        ├──▶ data/history.py       append to history_raw.csv
+        │                          aggregate to history_daily.csv (1 row/day)
+        │                          deduplicate: 3 runs → 1 canonical daily row
+        ▼
+   visual/mapper.py        normalize 6 variables, compute dominant (argmax)
+        │
+        ├──▶ ml/predictor.py       build feature vector from daily history
+        │                          rf_model.predict_proba() → risk_score ∈ [0,1]
+        │                          fallback chain: history → ERA5 CSV → API estimates
+        ▼
+   visual/generator.py     HTML5 Canvas, seeded RNG, 8 render passes
+        │
+        ▼
+   Playwright              headless PNG export (900×1080px)
+        │
+        ▼
+   archive.py              update docs/data/archive.json
+        │
+        ▼
+   git commit + push       via GitHub Actions
+        │
+        ▼
+   GitHub Pages            gallery updated in ~30s
+```
 
-- **Galería principal**: grid de cuadros por fecha, filtrable por tipo de día y dominante
-- **Vista individual**: imagen en alta resolución, datos climáticos, leyenda visual, puntuación ML, comparación con el día anterior
-- **Documentación técnica**: sistema, gramática visual, arquitectura ML
+### 6.2 Production inference fallback chain
+
+The RF requires temporal features unavailable from a single API snapshot. Three fallback modes:
+
+1. **Full history (≥14 days):** All lag, rolling, and gradient features computed from real observed data. Equivalent to training conditions.
+2. **Partial history (1–13 days):** Rolling means use `min_periods=1` (functional from day 1, converging). Missing lags filled with current value. Prediction is valid but conservative.
+3. **No history (day 0):** `predict_from_history()` called on `ml/data_todo/featuresAll.csv`. Uses the last ERA5 observation as the feature vector. Prediction reflects 2024 climate conditions, not live data.
+
+### 6.3 Automation
+
+GitHub Actions workflow (`.github/workflows/daily.yml`):
+- **Triggers:** `schedule` at 07:00, 11:00, 19:00 UTC (08h, 12h, 20h Spain time) + `workflow_dispatch`
+- **Permissions:** read/write (required for commit)
+- **Steps:** checkout → setup Python 3.11 → install dependencies → install Playwright Chromium → run `main.py --headless` → `git add data/ docs/ output/` → conditional commit (skipped if no changes) → push
+
+Three daily paintings per day serve different atmospheric moments (morning, midday, evening) while also exercising the deduplication logic that maintains exactly one daily row in the history CSV.
 
 ---
 
-## Stack tecnológico
-
-### Completado
-
-| Componente | Tecnología | Propósito |
-|---|---|---|
-| Lenguaje principal | Python 3.11 | Pipeline de datos y generación |
-| Ingesta de datos | `requests` | Llamadas a APIs externas |
-| Variables de entorno | `python-dotenv` | Gestión segura de credenciales |
-| Arte generativo | Canvas 2D (HTML5 nativo) | Renderizado pictórico sin dependencias |
-| RNG determinista | XORShift seeded | Reproducibilidad entre renders |
-| Exportación | HTML5 Canvas API | PNG desde el navegador |
-
-### En desarrollo (Módulo 4)
-
-| Componente | Tecnología | Propósito |
-|---|---|---|
-| Dataset histórico | ERA5 via `cdsapi` | Datos climáticos para entrenamiento |
-| Feature engineering | `pandas`, `numpy` | Construcción de features temporales |
-| Modelo v1 | `scikit-learn` (Random Forest) | Clasificación de eventos extremos |
-| Modelo v2 | `PyTorch` (LSTM) | Dependencias temporales largas |
-| Interpretabilidad | `shap` | SHAP values para explicabilidad |
-| Evaluación | `scikit-learn` metrics | Accuracy, F1, ROC AUC |
-
-### Pendiente (Módulos 5 y 6)
-
-| Componente | Tecnología | Propósito |
-|---|---|---|
-| Automatización | GitHub Actions | Generación diaria sin intervención |
-| Headless rendering | Playwright | Exportar PNG sin navegador manual |
-| Hosting web | GitHub Pages | Portfolio público y archivo |
-| Datos AEMET | AEMET OpenData API | Etiquetas de eventos extremos reales |
-
----
-
-## Estructura del repositorio
+## 7. Repository Structure
 
 ```
 atmospherica/
-├── .env                        ← API key (nunca en git)
-├── .gitignore
-├── requirements.txt
-├── main.py                     ← Punto de entrada principal
-│
+├── .github/workflows/daily.yml    ← 3 daily crons + manual dispatch
 ├── data/
-│   ├── __init__.py
-│   ├── fetcher.py              ← Ingesta desde OpenWeatherMap
-│   └── mock.py                 ← Datos estáticos para desarrollo
-│
+│   ├── fetcher.py                 ← OpenWeatherMap + Air Pollution APIs
+│   ├── history.py                 ← raw readings → daily aggregates
+│   ├── history_raw.csv            ← up to 3 readings/day, committed
+│   └── history_daily.csv          ← one canonical row/day, committed
 ├── visual/
-│   ├── __init__.py
-│   ├── mapper.py               ← Normalización y cálculo del dominante
-│   └── generator.py            ← Generador HTML + Canvas 2D (v2)
-│
-├── ml/                         ← PENDIENTE
-│   ├── __init__.py
-│   ├── features.py             ← Construcción de features temporales
-│   ├── trainer.py              ← Entrenamiento del modelo
-│   └── predictor.py            ← Inferencia en producción
-│
-├── archive/                    ← PENDIENTE
-│   ├── logger.py               ← Registro de cuadros generados
-│   └── index.json              ← Base de datos histórica
-│
-├── web/                        ← PENDIENTE
-│   ├── index.html              ← Galería principal
-│   ├── gallery.html            ← Vista de cuadros
-│   └── about.html              ← Documentación técnica
-│
-├── output/                     ← Cuadros generados (no en git excepto los finales)
-│   └── atmospherica_Seville_2026-04-27_13h.html
-│
-└── .github/
-    └── workflows/
-        └── daily.yml           ← PENDIENTE — automatización
+│   ├── mapper.py                  ← normalization + dominant computation
+│   └── generator.py               ← HTML5 Canvas painter (v2)
+├── ml/
+│   ├── features.py                ← ERA5 NetCDF → featuresAll.csv (RF)
+│   ├── lstm_trainer.py            ← LSTM training pipeline
+│   ├── trainer.py                 ← RF training + SHAP
+│   ├── predictor.py               ← RF production inference (3 fallback modes)
+│   ├── data_todo/
+│   │   ├── featuresAll.csv        ← RF features, ERA5 1940–1990 + 2010–2024
+│   │   └── features_lstm.csv      ← LSTM features (17 columns)
+│   └── final_model/
+│       ├── rf_model.pkl           ← trained RF
+│       ├── features.pkl           ← ordered RF feature list
+│       ├── metrics.json           ← RF: AUC 0.836, F1 0.149, SHAP values
+│       ├── lstm_model.pt          ← trained LSTM weights
+│       ├── lstm_scaler.pkl        ← StandardScaler fitted on train days
+│       ├── lstm_feature_cols.pkl  ← ordered LSTM feature list
+│       └── lstm_metrics.json      ← LSTM: AUC 0.678, F1 0.135, history
+├── docs/
+│   ├── index.html                 ← live exhibition gallery
+│   ├── about.html                 ← project + visual grammar description
+│   ├── technical.html             ← ML documentation (this document in HTML)
+│   ├── data/archive.json          ← painting metadata, auto-updated
+│   └── output/                    ← generated PNGs, committed
+├── archive.py                     ← updates archive.json
+├── main.py                        ← entry point
+└── requirements.txt
 ```
 
 ---
 
-## Cómo ejecutar
+## 8. Setup and Execution
 
-### Requisitos
+### Requirements
 
 - Python 3.11+
-- pip
-- Cuenta gratuita en [openweathermap.org](https://openweathermap.org/api)
-- Navegador moderno (Chrome, Firefox, Edge)
+- Free [OpenWeatherMap API key](https://openweathermap.org/api) (1,000 calls/day on free tier)
+- Copernicus CDS account (for ERA5 download and model retraining only)
 
-### Instalación
+### Local setup
 
 ```bash
-git clone https://github.com/tu-usuario/atmospherica
+git clone https://github.com/norapfr/atmospherica
 cd atmospherica
-python -m venv venv
-source venv/bin/activate        # Mac/Linux
-# venv\Scripts\activate         # Windows
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+playwright install chromium
 ```
 
-### Configuración
-
-Crear el archivo `.env`:
 ```
-OPENWEATHER_API_KEY=tu_api_key_aqui
+# .env
+OPENWEATHER_API_KEY=your_key_here
 ```
 
-### Ejecución
+### Run
 
 ```bash
-python main.py
+python main.py             # generate painting, open browser
+python main.py --headless  # generate PNG without browser (CI mode)
 ```
 
-El script:
-1. Obtiene los datos climáticos actuales de Sevilla
-2. Los normaliza y calcula la variable dominante
-3. Genera un archivo HTML autónomo en `output/`
-4. Abre el navegador automáticamente
-5. Pinta el cuadro (render instantáneo con Canvas 2D)
-6. El botón GUARDAR PNG exporta la imagen final
+### Train RF
 
-### Cambiar ciudad
+```bash
+python ml/features.py      # ERA5 NetCDF → ml/data_todo/featuresAll.csv
+python ml/trainer.py       # train RF, save model + SHAP metrics
+```
 
-En `config.py`:
+### Train LSTM
+
+```bash
+# If features_lstm.csv doesn't exist yet:
+python ml/lstm_trainer.py --mode train --build_features
+
+# If features_lstm.csv already exists:
+python ml/lstm_trainer.py --mode train
+```
+
+### Deploy to GitHub Actions
+
+1. `Settings → Actions → General → Workflow permissions → Read and write permissions`
+2. `Settings → Secrets → Actions → New secret: OPENWEATHER_API_KEY`
+3. `Settings → Pages → Branch: main → Folder: /docs`
+
+---
+
+## 9. Dependencies
+
+| Package | Purpose |
+|---|---|
+| `scikit-learn` | Random Forest, StandardScaler, TimeSeriesSplit, metrics |
+| `torch` | LSTM architecture, Focal Loss, AdamW |
+| `shap` | TreeExplainer SHAP values for RF interpretability |
+| `xarray`, `netCDF4` | ERA5 NetCDF4 loading and merging |
+| `cdsapi` | Copernicus CDS API client for ERA5 download |
+| `pandas`, `numpy` | Feature engineering and data manipulation |
+| `joblib` | Model serialization |
+| `playwright` | Headless Chromium for PNG export |
+| `requests`, `python-dotenv` | API calls and credential management |
+
+---
+---
+
+# ATMOSPHERICA (Español)
+
+> *Un sistema de machine learning que traduce observaciones atmosféricas en tiempo real a pintura generativa determinista, con una capa predictiva integrada para eventos climáticos extremos mediante Random Forest y LSTM entrenados sobre datos de reanálisis ERA5.*
+
+---
+
+## Resumen
+
+ATMOSPHERICA es un sistema autónomo que, tres veces al día, ingiere datos meteorológicos y de calidad del aire de la API de OpenWeatherMap, mapea cada variable a un parámetro visual formal a través de un pipeline de normalización calibrado con rangos históricos locales, y genera una pintura abstracta única que codifica el estado atmosférico de ese momento. Un generador de números pseudoaleatorios determinista con semilla garantiza que las mismas condiciones atmosféricas produzcan siempre la misma imagen. La variable dominante — definida como el argmax de los valores normalizados de seis variables climáticas — deforma la composición global, la paleta y el comportamiento de renderizado de todas las demás capas.
+
+Un componente predictivo entrenado sobre datos de reanálisis ERA5 (1940–1990 y 2010–2024, ~24.800 observaciones diarias) estima la probabilidad de que ocurra un evento climático extremo al día siguiente. Cuando el riesgo supera umbrales definidos, aparecen señales de alarma visuales en la pintura usando la morfología de la variable dominante del día renderizada en el color canónico del evento predicho. El pipeline completo — ingesta, feature engineering, predicción, renderizado, exportación PNG y publicación web — corre de forma autónoma mediante GitHub Actions y actualiza una galería en GitHub Pages con cada ejecución.
+
+---
+
+## 1. Motivación y justificación del diseño
+
+### 1.1 El problema de la visualización convencional
+
+La visualización de datos convencional traduce valores numéricos a primitivas de gráfico: ejes, barras, líneas. El dato se representa pero no se experimenta. Un gráfico de temperatura muestra que hubo 42°C un día determinado; no comunica qué significa 42°C en la cuenca del Guadalquivir en agosto — su violencia, su persistencia, cómo anula todo lo demás.
+
+ATMOSPHERICA propone una relación diferente entre dato y representación. En lugar de mapear datos climáticos *sobre* una forma visual, usa datos climáticos para *generar* forma a través de una gramática de reglas donde cada variable controla una familia de elementos visuales con semántica de color fija, geometría paramétrica y comportamiento dinámico que cambia cualitativamente, no solo cuantitativamente, a medida que crece la intensidad de la variable.
+
+### 1.2 Por qué esto es un problema de ML engineering
+
+El proyecto no es un ejercicio de data art con algo de Python. Es un sistema de ML end-to-end con los siguientes requisitos de ingeniería:
+
+- Ingesta de APIs reales con gestión de credenciales y manejo de errores
+- Normalización histórica con calibración local (25°C es irrelevante en Sevilla; es un evento de calor en Edimburgo — los rangos globales no tienen sentido)
+- Feature engineering para predicción de series temporales (medias móviles, lags, gradientes, codificación estacional, composites específicos del dominio)
+- Entrenamiento de modelos con metodología de evaluación apropiada para datos temporales desbalanceados (TimeSeriesSplit, AUC como métrica principal, optimización de umbral)
+- Inferencia en producción que degrada de forma controlada cuando el contexto temporal no está disponible
+- Despliegue automatizado con persistencia de estado (CSVs de historial commiteados al repositorio)
+- Un artefacto público y vivo que se acumula diariamente
+
+La pintura es el formato de salida. El sistema que hay debajo es la contribución.
+
+---
+
+## 2. Datos
+
+### 2.1 Reanálisis ERA5
+
+El dataset primario es el reanálisis ERA5 del Copernicus Climate Data Store, descargado vía `cdsapi` para una celda de cuadrícula de 1,5° × 1,5° centrada en Sevilla (38°N–36,5°N, 6,5°W–5°W). Se seleccionaron dos períodos temporales:
+
+- **1940–1990**: 51 años de clima pre-industrial y de industrialización temprana. Proporciona la línea base estadística a largo plazo para la frecuencia de eventos extremos y la distribución estacional en la cuenca del Guadalquivir.
+- **2010–2024**: 15 años de clima contemporáneo con tendencia de calentamiento documentada y mayor frecuencia de eventos de calor extremo en el sur de Iberia.
+
+La división es deliberada. Entrenar exclusivamente con datos recientes subestimaría la frecuencia histórica de episodios de frío y precipitación. Entrenar exclusivamente con datos históricos perdería el cambio distribucional en los máximos estivales impulsado por el cambio climático. El dataset combinado expone al modelo tanto a la línea base climatológica como a la señal contemporánea.
+
+**Variables descargadas** a las 06:00, 12:00, 18:00 UTC: temperatura 2m (`t2m`), presión superficial (`sp`), componentes del viento 10m (`u10`, `v10`), temperatura de punto de rocío 2m (`d2m`), precipitación total acumulada (`tp`), cobertura nubosa total (`tcc`).
+
+**Dataset final:** 24.838 observaciones diarias en ambos períodos.
+
+### 2.2 Definición de etiquetas
+
+Target de clasificación binaria: ¿habrá un evento climático extremo mañana? El target es el indicador de evento desplazado un día hacia adelante (`shift(-1)`).
+
+Cuatro disparadores de evento (lógica OR):
+
+| Tipo | Criterio | Fuente |
+|---|---|---|
+| Calor | T_max ≥ 38°C | Definición de ola de calor AEMET para Sevilla |
+| Frío | T_max ≤ 10°C | Umbral climatológico local |
+| Viento | Velocidad ≥ 8 m/s | Inicio de viento de gale-force |
+| Lluvia | Precip ≥ 1 mm/día | Precipitación medible |
+
+**Tasa de eventos: 5,0%** de los días en el dataset completo.
+
+---
+
+## 3. Modelos
+
+### 3.1 Random Forest
+
+**Configuración:**
+
 ```python
-CITY = "Madrid"        # o cualquier ciudad
-COUNTRY_CODE = "ES"
+RandomForestClassifier(
+    n_estimators=400,
+    max_depth=10,
+    min_samples_leaf=4,
+    class_weight="balanced_subsample",
+    random_state=42,
+    n_jobs=-1
+)
 ```
 
+**Evaluación:** TimeSeriesSplit con 5 folds estrictamente secuenciales.
+
+**Resultados:**
+
+| Fold | F1 | AUC |
+|---|---|---|
+| 1 | 0,043 | 0,806 |
+| 2 | 0,127 | 0,773 |
+| 3 | 0,190 | 0,888 |
+| 4 | 0,156 | 0,825 |
+| 5 | 0,229 | 0,886 |
+| **Media** | **0,149** | **0,836** |
+
+**Sobre el F1:** Con una tasa de eventos del 5%, un clasificador que predice siempre negativo obtiene F1 = 0,0 y accuracy = 95%. El F1 = 0,149 del RF refleja detecciones positivas reales en un trade-off precision-recall útil. AUC 0,836 es la métrica operativa.
+
+### 3.2 AtmosphericLSTM
+
+**Arquitectura:**
+```
+Input  → (batch, 14, 17)    # ventana de 14 días × 17 features
+LSTM₁  → hidden=128
+LSTM₂  → hidden=64
+LayerNorm → (batch, 64)     # último timestep
+Linear(64→32) + GELU + Dropout(0,25)
+Linear(32→1) + Sigmoid
+```
+
+**Parámetros entrenables:** 127.169
+
+**Resultados:**
+
+| Métrica | Valor |
+|---|---|
+| Test ROC-AUC | 0,678 |
+| Test F1 (th=0,38) | 0,135 |
+| Test AUC-PR | 0,091 |
+| Mejor val AUC-PR | 0,121 |
+| Epochs hasta early stopping | 40 / 150 |
+
+### 3.3 Análisis comparativo
+
+El RF supera al LSTM en 0,158 puntos de AUC pese a entrenarse con menos días (5.472 vs 24.838). La razón principal es el feature engineering: el RF recibe medias móviles de 7 días, lags de 3 días e índices compuestos específicos del dominio que codifican contexto temporal explícito. El LSTM debe derivar representaciones equivalentes a partir de secuencias de 14 días en bruto. Con ~24k observaciones diarias y 127k parámetros, el LSTM no está limitado por capacidad sino por información: los patrones temporales necesarios para una predicción precisa se capturan mejor con features engineered que aprendiéndolos de secuencias de esta longitud y este tamaño de dataset.
+
+Esta observación tiene implicaciones prácticas: para predicción climática tabular a resolución diaria con datasets menores de 50k observaciones, el feature engineering explícito combinado con modelos de árboles generalmente superará a los modelos de secuencias. El LSTM se vuelve competitivo cuando hay datos de alta frecuencia disponibles (horarios o sub-horarios) donde el feature engineering explícito se vuelve intratable.
+
 ---
 
-## Por qué esto es ML Engineering, no solo arte
+## 4. Configuración y ejecución
 
-Esta es la pregunta que cualquier reclutador técnico hará. La respuesta tiene cuatro partes.
+### Instalación local
 
-**1. Pipeline de datos real con APIs externas**
+```bash
+git clone https://github.com/norapfr/atmospherica
+cd atmospherica
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
+```
 
-El sistema ingiere datos de dos APIs externas, gestiona autenticación con credenciales seguras, parsea JSON anidado, normaliza variables con rangos históricos contextuales, y descompone vectores. Este es el trabajo del 80% de los proyectos de ML en producción.
+Crear `.env`:
+```
+OPENWEATHER_API_KEY=tu_api_key_aquí
+```
 
-**2. Sistema de mapeo paramétrico con lógica de negocio**
+### Ejecutar
 
-El mapeador implementa la normalización de seis variables con rangos locales y calcula el dominante mediante argmax. El generador aplica 15+ transformaciones condicionales sobre ese dominante. Esto es feature engineering aplicado a un dominio no convencional: la habilidad de transformar datos crudos en representaciones útiles para un sistema downstream es exactamente lo que se hace en ML.
+```bash
+python main.py             # genera pintura, abre navegador
+python main.py --headless  # genera PNG sin navegador
+```
 
-**3. Modelo predictivo de series temporales (Módulo 4)**
+### Entrenar modelos
 
-El LSTM entrenado con ERA5 es ML estándar: dataset real, feature engineering, entrenamiento, evaluación con métricas, inferencia en producción. Lo que lo diferencia es que la inferencia del modelo afecta directamente al output artístico, haciendo el sistema completo end-to-end.
+```bash
+# Random Forest
+python ml/features.py && python ml/trainer.py
 
-**4. Sistema autónomo en producción**
+# LSTM
+python ml/lstm_trainer.py --mode train --build_features
+```
 
-El resultado final es un sistema que corre solo, sin intervención manual, genera outputs cada día, los persiste en un archivo histórico, y los publica en una web. Esto demuestra capacidad de construir sistemas, no solo notebooks de Jupyter.
+### Despliegue automático en tu fork
 
-La capa de arte no es decorativa para el portfolio. Es lo que hace que el proyecto sea memorable en una entrevista, lo que permite explicar decisiones técnicas de forma narrativa, y lo que demuestra que el autor puede pensar en un sistema de ML como algo más que un modelo en aislamiento.
+1. `Settings → Actions → General → Workflow permissions → Read and write permissions`
+2. `Settings → Secrets → Actions → OPENWEATHER_API_KEY`
+3. `Settings → Pages → Branch: main → Folder: /docs`
 
 ---
 
-*Proyecto desarrollado por Nora Peñaloza Friqui — Sevilla, 2026*
+## 5. Stack
 
-*Stack: Python · Canvas 2D · scikit-learn · PyTorch · ERA5 · OpenWeatherMap API · GitHub Actions · GitHub Pages*
+`Python 3.11` · `scikit-learn` · `PyTorch` · `shap` · `xarray` · `cdsapi` · `netCDF4` · `pandas` · `numpy` · `Playwright` · `GitHub Actions` · `GitHub Pages`
+
+---
+
+*Sevilla, 2026*
