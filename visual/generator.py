@@ -7,7 +7,8 @@ Cuando PRESIÓN domina, la segunda variable actúa también como dominante.
 
 import json, os, math, webbrowser
 from datetime import datetime
-
+import zoneinfo
+_TZ = zoneinfo.ZoneInfo("Europe/Madrid")
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
@@ -901,7 +902,7 @@ def generate_html(visual_params: dict, output_dir: str = "output") -> tuple:
     """
     os.makedirs(output_dir, exist_ok=True)
     data  = visual_params["raw"]
-    now   = datetime.now()
+    now   = datetime.now(_TZ)
     date  = now.strftime("%Y-%m-%d")
     hour  = now.hour
     city  = data["city"]
