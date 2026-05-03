@@ -5,11 +5,13 @@ on:
     - cron: '0 6 * * *'    # 8h Madrid (UTC+2)
     - cron: '0 10 * * *'   # 12h Madrid (UTC+2)
     - cron: '0 18 * * *'   # 20h Madrid (UTC+2)
-  workflow_dispatch:        # permite lanzarlo manualmente desde GitHub
+  workflow_dispatch:
 
 jobs:
   generate:
     runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Madrid
 
     steps:
       - name: Checkout repo
@@ -23,15 +25,15 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependencias
-        run: pip install -r requirements.txt playwright
-             && playwright install chromium
+        run: |
+          pip install -r requirements.txt playwright
+          playwright install chromium
 
       - name: Generar cuadro
         env:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
-          TZ: Europe/Madrid
         run: python main.py --headless
-      
+
       - name: Copiar imágenes a docs
         run: |
           mkdir -p docs/output
@@ -42,5 +44,5 @@ jobs:
           git config user.name  "atmospherica-bot"
           git config user.email "bot@atmospherica"
           git add data/ output/ docs/
-          git diff --staged --quiet || git commit -m "paint $(date +%Y-%m-%d)"
+          git diff --staged --quiet || git commit -m "paint $(TZ=Europe/Madrid date +%Y-%m-%d\ %H:%M)"
           git push
