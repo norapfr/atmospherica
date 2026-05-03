@@ -1,0 +1,338 @@
+{
+  "model": "AtmosphericLSTM",
+  "seq_len": 14,
+  "n_features": 17,
+  "feature_cols": [
+    "temp_c",
+    "dewpoint_c",
+    "pressure_hpa",
+    "wind_u",
+    "wind_v",
+    "precip_mm",
+    "cloud_cover",
+    "season_sin",
+    "season_cos",
+    "temp_ma3",
+    "temp_ma7",
+    "pressure_ma3",
+    "pressure_grad",
+    "wind_speed",
+    "wind_ma3",
+    "precip_ma3",
+    "dry_index"
+  ],
+  "epochs_run": 40,
+  "threshold_f1": 0.38000000000000006,
+  "threshold_f2": 0.30000000000000004,
+  "threshold_used": 0.38000000000000006,
+  "test_f1": 0.13527851458885942,
+  "test_roc_auc": 0.6779019797199421,
+  "test_auc_pr": 0.09079989195388276,
+  "best_val_auc_pr": 0.12129201095771884,
+  "n_train": 17371,
+  "n_val": 2470,
+  "n_test": 4968,
+  "cfg": {
+    "data_path": "ml/data_todo",
+    "features_csv": "ml/data_todo/features_lstm.csv",
+    "models_dir": "ml/final_model",
+    "seq_len": 14,
+    "hidden1": 128,
+    "hidden2": 64,
+    "dropout": 0.25,
+    "epochs": 150,
+    "batch_size": 64,
+    "lr": 0.0001,
+    "lr_warmup": 10,
+    "weight_decay": 0.0001,
+    "patience": 25,
+    "gap": 14,
+    "focal_alpha": 0.8,
+    "focal_gamma": 1.5,
+    "train_frac": 0.7,
+    "val_frac": 0.1,
+    "seed": 42
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.03457,
+      "f1": 0.0,
+      "roc_auc": 0.6583,
+      "auc_pr": 0.1195
+    },
+    {
+      "epoch": 2,
+      "loss": 0.0325,
+      "f1": 0.0,
+      "roc_auc": 0.6826,
+      "auc_pr": 0.1177
+    },
+    {
+      "epoch": 3,
+      "loss": 0.0316,
+      "f1": 0.0,
+      "roc_auc": 0.6967,
+      "auc_pr": 0.1159
+    },
+    {
+      "epoch": 4,
+      "loss": 0.03122,
+      "f1": 0.0156,
+      "roc_auc": 0.7024,
+      "auc_pr": 0.1196
+    },
+    {
+      "epoch": 5,
+      "loss": 0.03082,
+      "f1": 0.0156,
+      "roc_auc": 0.7042,
+      "auc_pr": 0.1189
+    },
+    {
+      "epoch": 6,
+      "loss": 0.03073,
+      "f1": 0.0153,
+      "roc_auc": 0.7039,
+      "auc_pr": 0.1193
+    },
+    {
+      "epoch": 7,
+      "loss": 0.03049,
+      "f1": 0.0153,
+      "roc_auc": 0.7062,
+      "auc_pr": 0.1155
+    },
+    {
+      "epoch": 8,
+      "loss": 0.03055,
+      "f1": 0.015,
+      "roc_auc": 0.7058,
+      "auc_pr": 0.1133
+    },
+    {
+      "epoch": 9,
+      "loss": 0.03027,
+      "f1": 0.0154,
+      "roc_auc": 0.7062,
+      "auc_pr": 0.1201
+    },
+    {
+      "epoch": 10,
+      "loss": 0.03012,
+      "f1": 0.015,
+      "roc_auc": 0.7068,
+      "auc_pr": 0.1169
+    },
+    {
+      "epoch": 11,
+      "loss": 0.03013,
+      "f1": 0.0294,
+      "roc_auc": 0.7108,
+      "auc_pr": 0.1185
+    },
+    {
+      "epoch": 12,
+      "loss": 0.02969,
+      "f1": 0.0292,
+      "roc_auc": 0.7087,
+      "auc_pr": 0.1188
+    },
+    {
+      "epoch": 13,
+      "loss": 0.02996,
+      "f1": 0.0292,
+      "roc_auc": 0.7071,
+      "auc_pr": 0.1177
+    },
+    {
+      "epoch": 14,
+      "loss": 0.02975,
+      "f1": 0.0294,
+      "roc_auc": 0.7093,
+      "auc_pr": 0.1212
+    },
+    {
+      "epoch": 15,
+      "loss": 0.0295,
+      "f1": 0.0571,
+      "roc_auc": 0.7092,
+      "auc_pr": 0.1213
+    },
+    {
+      "epoch": 16,
+      "loss": 0.0295,
+      "f1": 0.0576,
+      "roc_auc": 0.7089,
+      "auc_pr": 0.1205
+    },
+    {
+      "epoch": 17,
+      "loss": 0.0294,
+      "f1": 0.0576,
+      "roc_auc": 0.7102,
+      "auc_pr": 0.1211
+    },
+    {
+      "epoch": 18,
+      "loss": 0.02926,
+      "f1": 0.0576,
+      "roc_auc": 0.7098,
+      "auc_pr": 0.1192
+    },
+    {
+      "epoch": 19,
+      "loss": 0.02898,
+      "f1": 0.0828,
+      "roc_auc": 0.711,
+      "auc_pr": 0.1162
+    },
+    {
+      "epoch": 20,
+      "loss": 0.02917,
+      "f1": 0.0851,
+      "roc_auc": 0.7117,
+      "auc_pr": 0.1187
+    },
+    {
+      "epoch": 21,
+      "loss": 0.02909,
+      "f1": 0.0857,
+      "roc_auc": 0.712,
+      "auc_pr": 0.119
+    },
+    {
+      "epoch": 22,
+      "loss": 0.02878,
+      "f1": 0.0833,
+      "roc_auc": 0.7117,
+      "auc_pr": 0.1178
+    },
+    {
+      "epoch": 23,
+      "loss": 0.02886,
+      "f1": 0.0857,
+      "roc_auc": 0.7117,
+      "auc_pr": 0.1176
+    },
+    {
+      "epoch": 24,
+      "loss": 0.02864,
+      "f1": 0.0811,
+      "roc_auc": 0.7107,
+      "auc_pr": 0.1169
+    },
+    {
+      "epoch": 25,
+      "loss": 0.02867,
+      "f1": 0.0822,
+      "roc_auc": 0.7116,
+      "auc_pr": 0.1155
+    },
+    {
+      "epoch": 26,
+      "loss": 0.02861,
+      "f1": 0.0816,
+      "roc_auc": 0.7103,
+      "auc_pr": 0.1143
+    },
+    {
+      "epoch": 27,
+      "loss": 0.02849,
+      "f1": 0.0769,
+      "roc_auc": 0.7085,
+      "auc_pr": 0.1134
+    },
+    {
+      "epoch": 28,
+      "loss": 0.02849,
+      "f1": 0.0839,
+      "roc_auc": 0.7099,
+      "auc_pr": 0.1138
+    },
+    {
+      "epoch": 29,
+      "loss": 0.02816,
+      "f1": 0.0892,
+      "roc_auc": 0.7068,
+      "auc_pr": 0.1115
+    },
+    {
+      "epoch": 30,
+      "loss": 0.02827,
+      "f1": 0.0848,
+      "roc_auc": 0.709,
+      "auc_pr": 0.1088
+    },
+    {
+      "epoch": 31,
+      "loss": 0.02827,
+      "f1": 0.069,
+      "roc_auc": 0.7096,
+      "auc_pr": 0.1122
+    },
+    {
+      "epoch": 32,
+      "loss": 0.02794,
+      "f1": 0.0755,
+      "roc_auc": 0.7088,
+      "auc_pr": 0.1096
+    },
+    {
+      "epoch": 33,
+      "loss": 0.02802,
+      "f1": 0.075,
+      "roc_auc": 0.7057,
+      "auc_pr": 0.1088
+    },
+    {
+      "epoch": 34,
+      "loss": 0.0278,
+      "f1": 0.0723,
+      "roc_auc": 0.7044,
+      "auc_pr": 0.1074
+    },
+    {
+      "epoch": 35,
+      "loss": 0.02787,
+      "f1": 0.0745,
+      "roc_auc": 0.706,
+      "auc_pr": 0.1081
+    },
+    {
+      "epoch": 36,
+      "loss": 0.02752,
+      "f1": 0.0714,
+      "roc_auc": 0.7062,
+      "auc_pr": 0.1068
+    },
+    {
+      "epoch": 37,
+      "loss": 0.02762,
+      "f1": 0.0714,
+      "roc_auc": 0.7005,
+      "auc_pr": 0.1059
+    },
+    {
+      "epoch": 38,
+      "loss": 0.02739,
+      "f1": 0.0719,
+      "roc_auc": 0.7026,
+      "auc_pr": 0.1051
+    },
+    {
+      "epoch": 39,
+      "loss": 0.02736,
+      "f1": 0.0706,
+      "roc_auc": 0.7025,
+      "auc_pr": 0.1021
+    },
+    {
+      "epoch": 40,
+      "loss": 0.02738,
+      "f1": 0.069,
+      "roc_auc": 0.7002,
+      "auc_pr": 0.1035
+    }
+  ]
+}

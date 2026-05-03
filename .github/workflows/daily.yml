@@ -2,9 +2,9 @@ name: Generar cuadro diario
 
 on:
   schedule:
-    - cron: '0 7 * * *'    # 8h — amanecer
-    - cron: '0 11 * * *'   # 12h — mediodía
-    - cron: '0 19 * * *'   # 20h — atardecer
+    - cron: '0 6 * * *'    # 8h Madrid (UTC+2)
+    - cron: '0 10 * * *'   # 12h Madrid (UTC+2)
+    - cron: '0 18 * * *'   # 20h Madrid (UTC+2)
   workflow_dispatch:        # permite lanzarlo manualmente desde GitHub
 
 jobs:
@@ -29,6 +29,7 @@ jobs:
       - name: Generar cuadro
         env:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          TZ: Europe/Madrid
         run: python main.py --headless
       
       - name: Copiar imágenes a docs

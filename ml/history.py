@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from datetime import datetime
+import zoneinfo
+_TZ = zoneinfo.ZoneInfo("Europe/Madrid")
 
 # ── Rutas ─────────────────────────────────────────────────────────────────
 RAW_PATH   = Path("data/history_raw.csv")    # hasta 3 lecturas por día
@@ -21,7 +23,7 @@ def append_reading(data: dict):
     Acumula hasta 3 lecturas por día (8h, 12h, 20h).
     Si ya existe la misma fecha+hora la sobreescribe.
     """
-    now = datetime.now()
+    now = datetime.now(_TZ)
     row = {
         "datetime":    now.strftime("%Y-%m-%d %H:%M"),
         "date":        str(now.date()),
@@ -186,7 +188,7 @@ def days_available() -> int:
 
 def history_status() -> str:
     n       = days_available()
-    today   = str(datetime.now().date())
+    today   = str(datetime.now(_TZ).date())
     n_today = 0
 
     if RAW_PATH.exists():
