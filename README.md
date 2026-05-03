@@ -347,7 +347,6 @@ atmospherica/
 ├── .github/workflows/daily.yml    ← 3 daily crons + manual dispatch
 ├── data/
 │   ├── fetcher.py                 ← OpenWeatherMap + Air Pollution APIs
-│   ├── history.py                 ← raw readings → daily aggregates
 │   ├── history_raw.csv            ← up to 3 readings/day, committed
 │   └── history_daily.csv          ← one canonical row/day, committed
 ├── visual/
@@ -358,6 +357,7 @@ atmospherica/
 │   ├── lstm_trainer.py            ← LSTM training pipeline
 │   ├── trainer.py                 ← RF training + SHAP
 │   ├── predictor.py               ← RF production inference (3 fallback modes)
+|   ├── history.py                 ← raw readings → daily aggregates
 │   ├── data_todo/
 │   │   ├── featuresAll.csv        ← RF features, ERA5 1940–1990 + 2010–2024
 │   │   └── features_lstm.csv      ← LSTM features (17 columns)
