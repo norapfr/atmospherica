@@ -939,6 +939,145 @@
         }
 
         // ── Load archive & render ─────────────────────────────────────
+        function rainColor(e) {
+            const rain = e.rain_norm || 0;
+            return `hsl(210,${55 + rain * 30}%,${45 - rain * 15}%)`;
+        }
+
+        function legendEntries(e) {
+            const hum = e.humidity_norm || 0;
+            const we = e.wind_energy || 0;
+            const p = e.pressure_norm || 0;
+            const cld = e.cloud_norm || 0;
+            const pm = e.pm_norm || 0;
+            const dom = e.dominant || 'temperatura';
+            const dom2 = e.dominant2 || null;
+            const co = key => dom === 'presion' && dom2 === key;
+            const rain = e.rain_1h || 0;
+            const rainDesc = !e.is_raining
+                ? 'No precipitation in the last hour.'
+                : rain < 0.5 ? `Drizzle: ${rain.toFixed(1)} mm in the last hour.`
+                : rain < 2.5 ? `Light rain: ${rain.toFixed(1)} mm in the last hour.`
+                : rain < 7.5 ? `Moderate rain: ${rain.toFixed(1)} mm in the last hour.`
+                : `Heavy rain: ${rain.toFixed(1)} mm in the last hour.`;
+
+            return [
+                {
+                    sym: 'o', col: tempHsl(e.temp_c || 20),
+                    var: `Temperature - ${(e.temp_c || 20).toFixed(1)} C`,
+                    desc: `Concentric circles. Colour is fixed by temperature. ${dom === 'temperatura' ? 'DOMINANT: circles invade the canvas and overlap freely.' : co('temperatura') ? 'CO-DOMINANT: pressure leads, but circles and rings are enlarged.' : 'Base mode: fewer circles; size and ring count grow with heat.'}`
+                },
+                {
+                    sym: '~', col: windHsl(we),
+                    var: `Wind - ${(e.wind_speed || 0).toFixed(1)} m/s ${e.wind_dir || ''}`,
+                    desc: `Bezier curves aligned to the real geographic wind direction. ${we < 0.2 ? 'Calm: short whispers.' : we < 0.5 ? 'Moderate: mid-length curves.' : 'Strong: long strokes crossing the canvas.'}${dom === 'viento' ? ' DOMINANT: composition rotates and stretches in wind direction.' : co('viento') ? ' CO-DOMINANT: more and longer curves than base mode.' : ''}`
+                },
+                {
+                    sym: hum < 0.35 && dom !== 'humedad' && !co('humedad') ? '^' : '()',
+                    col: humHsl(hum),
+                    var: `Humidity - ${e.humidity || 0}%`,
+                    desc: `${hum < 0.35 && dom !== 'humedad' && !co('humedad') ? 'Equilateral triangles' : 'Soft ovals / ellipses'}. Green; more saturated means more humid.${dom === 'humedad' ? ' DOMINANT: blurred edges and fog-like expansion affect other layers.' : co('humedad') ? ' CO-DOMINANT: extra ovals and soft blur.' : ''}`
+                },
+                {
+                    sym: '=',
+                    col: presHsl(p),
+                    var: `Pressure - ${e.pressure || 1013} hPa`,
+                    desc: `Rectangles and bands. ${p > 0.65 ? 'High pressure: rigid horizontal bands and architectural composition.' : p > 0.4 ? 'Normal pressure: moderate horizontal bands.' : 'Low pressure: tilted fragments near the edges.'}${dom === 'presion' ? ' DOMINANT: pressure also activates the second strongest variable as co-dominant.' : ''}`
+                },
+                {
+                    sym: '<>',
+                    col: cloudHsl(cld),
+                    var: `Cloud cover - ${e.clouds || 0}%`,
+                    desc: `Flattened diamonds. ${cld < 0.2 ? 'Clear sky: few small shapes.' : cld < 0.55 ? 'Partly cloudy: medium scattered diamonds.' : 'Overcast: dense, flattened shapes in the upper half.'}${dom === 'nubes' ? ' DOMINANT: visual weight falls from above.' : co('nubes') ? ' CO-DOMINANT: more and larger diamonds.' : ''}`
+                },
+                {
+                    sym: '.',
+                    col: pmHsl(pm),
+                    var: `PM2.5 - ${(e.pm25 || 0).toFixed(1)} ug/m3`,
+                    desc: `Dots and violet haze applied as a final global layer. ${pm < 0.15 ? 'Clean air: almost invisible.' : pm < 0.4 ? 'Moderate pollution: visible grain and light veil.' : 'High pollution: dense haze contaminates all layers.'}${dom === 'pm25' ? ' DOMINANT: violet veil, larger particles and smog veins dominate.' : co('pm25') ? ' CO-DOMINANT: particles and veil intensify.' : ''}`
+                },
+                {
+                    sym: e.is_raining ? '//' : '0',
+                    col: rainColor(e),
+                    var: `Rain - ${rain.toFixed(1)} mm/h`,
+                    desc: `Blue-grey diagonal lines tilted by the real wind. More rain means more density and longer strokes. ${rainDesc}`
+                },
+            ];
+        }
+
+        function climateHTML(e) {
+            return [
+                ['Temperature', `${(e.temp_c || 0).toFixed(1)} C`],
+                ['Pressure', `${e.pressure || 0} hPa`],
+                ['Wind', `${(e.wind_speed || 0).toFixed(1)} m/s ${e.wind_dir || ''}`],
+                ['Humidity', `${e.humidity || 0}%`],
+                ['PM2.5', `${(e.pm25 || 0).toFixed(1)} ug/m3`],
+                ['Cloud cover', `${e.clouds || 0}%`],
+                ['Rain', `${(e.rain_1h || 0).toFixed(1)} mm/h`],
+            ].map(([l, v]) => `
+    <div class="cli-item">
+      <label>${l}</label>
+      <div class="cli-val">${v}</div>
+    </div>`).join('');
+        }
+
+        function mlHTML(e) {
+            if (!e.ml_ready) return `<p style="font-family:var(--mono);font-size:8px;color:var(--dust);letter-spacing:.12em;">ML model not available.</p>`;
+            const risk = e.risk_score || 0;
+            const pct = (risk * 100).toFixed(0);
+            const eventKnown = ['heat', 'cold', 'rain', 'wind'].includes(e.event_type);
+            const names = { heat: 'Heat extreme', cold: 'Intense cold', rain: 'Heavy rain', wind: 'Strong wind' };
+            const eventCols = { heat: '#d05020', cold: '#3060b0', rain: '#3070a0', wind: '#309060' };
+            const rCol = risk < .06 ? '#4a9a4a' : (eventCols[e.event_type] || '#a08030');
+            const yesNo = risk >= .06 ? 'Yes: tomorrow-risk signal active.' : 'No: below the visual activation threshold.';
+            const evtEn = risk < .06 ? 'No relevant event signal' : eventKnown ? names[e.event_type] : 'Generic extreme-event signal';
+            const nivel = risk < .06 ? 'No signal'
+                : risk < .20 ? 'Latent signal'
+                : risk < .25 ? 'Background tint active'
+                : risk < .50 ? 'Internal fractures active'
+                : risk < .75 ? 'Border intrusions active'
+                : risk < .85 ? 'Alert frame active'
+                : 'Critical radial focal points active';
+            const rows = [
+                ['> 6%', 'Edge intrusions', 'Small triangles enter from the four margins.', risk >= .06],
+                ['> 20%', 'Background tint', 'A transparent wash in the event colour covers the painting.', risk > .20],
+                ['> 25%', 'Internal fractures', 'Shapes based on today dominant grammar appear in the event colour.', risk > .25],
+                ['> 75%', 'Double alert frame', 'A soft frame plus a sharp frame tension the full canvas.', risk > .75],
+                ['> 85%', 'Radial focal points', 'Diffuse event-colour light spots contaminate the background.', risk > .85],
+            ];
+            const signalTable = risk < .06 ? `
+    <div style="font-family:var(--mono);font-size:8px;color:var(--mid);line-height:1.8;margin-top:12px;">
+      The probability is below 6%, so the painting keeps the base climate grammar only: no future-event marks are drawn.
+    </div>` : `
+    <div style="font-family:var(--mono);font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--dust);margin-top:16px;margin-bottom:8px;">How the risk appears in the painting</div>
+    <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:8px;color:var(--mid);line-height:1.7;">
+      <tbody>
+        ${rows.map(([threshold, label, desc, active]) => `
+        <tr style="border-top:1px solid var(--line);opacity:${active ? 1 : .38};">
+          <td style="padding:6px 8px 6px 0;color:${active ? rCol : 'var(--dust)'};white-space:nowrap;">${active ? 'on' : 'off'}</td>
+          <td style="padding:6px 8px;color:var(--dust);white-space:nowrap;">${threshold}</td>
+          <td style="padding:6px 8px 6px 0;">
+            <span style="color:${active ? 'var(--ink)' : 'var(--mid)'};">${label}</span><br>${desc}
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="font-family:var(--mono);font-size:8px;color:var(--mid);line-height:1.8;margin-top:10px;">
+      The colour comes from the predicted event type. If the model gives risk but no specific type, the page labels it as a generic extreme-event signal.
+    </div>`;
+            return `
+    <div style="font-family:var(--mono);font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:var(--dust);margin-bottom:10px;">Tomorrow's forecast</div>
+    <div style="font-family:var(--serif);font-size:13px;color:var(--ink);margin-bottom:10px;">
+      Event tomorrow? <em style="color:${rCol}">${yesNo}</em><br>
+      Signal type: <em style="color:${rCol}">${evtEn}</em>
+    </div>
+    <div class="risk-bar"><div class="risk-fill" style="width:${pct}%;background:${rCol};"></div></div>
+    <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:${rCol};margin-top:4px;">
+      <span>${nivel}</span><span>${pct}%</span>
+    </div>
+    ${signalTable}`;
+        }
+
         let todayEntry = null;
 
         async function init() {

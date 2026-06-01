@@ -4,9 +4,11 @@ sys.stdout.reconfigure(encoding='utf-8')
 import json
 from pathlib import Path
 from datetime import datetime
+import zoneinfo
 
 
 ARCHIVE_PATH = Path("docs/data/archive.json")
+_TZ = zoneinfo.ZoneInfo("Europe/Madrid")
 
 
 def update_archive(visual_params: dict, image_path: str):
@@ -27,7 +29,7 @@ def update_archive(visual_params: dict, image_path: str):
         archive = []
 
     data = visual_params["raw"]
-    now  = datetime.now()
+    now  = datetime.now(_TZ)
 
     entry = {
         # Metadatos
@@ -48,6 +50,11 @@ def update_archive(visual_params: dict, image_path: str):
         "humidity":    data["humidity"],
         "clouds":      data.get("clouds", 0),
         "pm25":        round(data.get("pm2_5", 0), 1),
+        "rain_1h":     round(visual_params.get("rain_1h", data.get("rain_1h", 0.0)), 2),
+        "rain_norm":   round(visual_params.get("rain_norm", 0.0), 3),
+        "is_raining":  visual_params.get("is_raining", False),
+        "weather_id":  visual_params.get("weather_id", data.get("weather_id", 800)),
+        "weather_group": visual_params.get("weather_group", "clear"),
 
         # Valores normalizados (para la leyenda interactiva de index.html)
         "temp_norm":     round(visual_params["temperature_norm"], 3),
