@@ -608,7 +608,7 @@
                     <div class="step-num">06</div>
                     <div class="step-content">
                         <h3>Automated publication</h3>
-                        <p>GitHub Actions runs 3 times daily (08h, 12h, 20h local time).
+                        <p>GitHub Actions runs twice daily (08h and 20h Madrid time).
                             Playwright exports PNG headlessly. Git commits the PNG, the history CSV,
                             and the archive JSON. GitHub Pages serves the gallery automatically.</p>
                     </div>
@@ -628,6 +628,15 @@
             <p>
                 The signals activate by progressive risk thresholds. The legend of each painting
                 shows exactly which layers are active and at what probability they trigger.
+                The production page treats <strong>6%</strong> as the visual activation threshold:
+                below that value the artwork keeps the base climate grammar only; above it, tomorrow's
+                risk starts to leave visible marks in today's image.
+            </p>
+            <p>
+                The Random Forest outputs the probability of an extreme event. The specific event
+                colour is assigned when the predictor can infer a type (heat, cold, rain, or wind);
+                if the probability is active but the type is ambiguous, the interface names it as a
+                generic extreme-event signal instead of pretending the model knows more than it does.
             </p>
 
             <div class="dominant-explainer">

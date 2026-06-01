@@ -625,7 +625,7 @@
                     a dry index specifically tuned for Seville's climate — temporal
                     context that the LSTM must reconstruct from raw sequences. With 24k days
                     of training data the LSTM saturates quickly. The AUC-PR plateaued
-                    at epoch 14 and early stopping triggered at epoch 40.</p>
+                    around epochs 14-15 and early stopping triggered at epoch 40.</p>
             </div>
         </div>
 
@@ -746,7 +746,7 @@ Linear(<span class="nm">32</span>→<span class="nm">1</span>)  + Sigmoid       
             </div>
             <p style="margin-top:12px;">
                 Early stopping triggered at epoch 40 (patience 25 on AUC-PR).
-                AUC-PR peaked at epoch 14 (0.121) and did not improve further,
+                AUC-PR peaked at epoch 15 (0.121) and did not improve further,
                 while ROC-AUC continued rising slowly. This plateau is characteristic
                 of Focal Loss on highly imbalanced data: once the model stops
                 finding new positive examples to focus on, the precision-recall
@@ -853,6 +853,15 @@ Linear(<span class="nm">32</span>→<span class="nm">1</span>)  + Sigmoid       
                 computed from a single API snapshot. The system accumulates one daily record
                 per calendar day in a CSV committed to the repository.
             </p>
+            <div class="notice">
+                <div class="notice-label">Risk score vs. event type</div>
+                <p>The production model outputs a calibrated probability through
+                    <code style="font-size:8px">predict_proba()</code>. That probability drives the
+                    visual warning system. The event type is a secondary heuristic label derived
+                    from the current feature row. When risk is active but no specific type crosses
+                    its physical threshold, the interface displays a generic extreme-event signal
+                    instead of over-claiming heat, cold, rain, or wind.</p>
+            </div>
             <div class="history-timeline">
                 <div class="history-row">
                     <div class="history-days">Day 0</div>
